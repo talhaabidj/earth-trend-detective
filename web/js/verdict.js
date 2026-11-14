@@ -46,7 +46,8 @@ export function describe(result, variable) {
     clear: {
       tone: "clear",
       title: `Yes: ${direction}, ${rateText}`,
-      body: `Both tests agree this is very unlikely to be chance (${rangeText}). Over the ${yearsShown} years shown, ` +
+      body: `Both tests agree (${rangeText}). If there were no real trend, a result this strong would turn up ` +
+        `by chance less than 1 time in 20. Over the ${yearsShown} years shown, ` +
         `that adds up to about ${withUnits(signed(rate * result.years_of_data / 10, decimals))}.`,
     },
     mixed: {
@@ -84,7 +85,8 @@ export function describe(result, variable) {
       `(counts as ${Math.round(result.effective_months)} independent months out of ${result.valid_months})`,
     `Rate from the ${method}: ${rateText} (${rangeText})`,
     `Month-to-month memory (lag-1 autocorrelation): ${result.autocorrelation.toFixed(2)}`,
-    `Years of data needed for a 90% chance of detection at this rate: ${yearsNeededText}`,
+    `Years of data needed for a 90% chance of detection: ${yearsNeededText} (based on the straight-line ` +
+      `slope, ${withUnits(signed(10 * result.line_slope, decimals))} per decade)`,
   ];
 
   return {

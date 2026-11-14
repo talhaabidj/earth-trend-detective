@@ -65,6 +65,29 @@ async function downloadJson(url) {
   return response.json();
 }
 
+// Every grid cell in a box, each with its own rows: [{lat, lon, rows}]. Used by the trend map.
+export async function getAreaCells(variable, box, firstYear) {
+  const url = areaUrl(variable, box, firstYear);
+  const data = await downloadJson(url);
+  const cells = data.features.map((cell) => ({
+    lon: cell.geometry.coordinates[0],
+    lat: cell.geometry.coordinates[1],
+    rows: toRows(cell.properties.parameter[variable]),
+  }));
+  return { cells, url };
+}
+
+// A square box around a point, `size` degrees wide (POWER allows 2 to 10 degrees).
+export function boxOfSize(lat, lon, size) {
+  const half = size / 2;
+  return {
+    south: Math.max(-89.5, lat - half),
+    north: Math.min(89.5, lat + half),
+    west: Math.max(-179.9, lon - half),
+    east: Math.min(179.9, lon + half),
+  };
+}
+
 // place is {lat, lon} for one grid cell, or {box: {south, north, west, east}} for an area.
 export async function getMonthlyData(variable, place, firstYear) {
   if (place.box) {
@@ -77,12 +100,7 @@ export async function getMonthlyData(variable, place, firstYear) {
   return { rows: toRows(data.properties.parameter[variable]), url, cells: 1 };
 }
 
-// A 2° x 2° box around a point (POWER needs at least 2° each way for an area).
+// The 2° x 2° "wider area" box (POWER needs at least 2° each way).
 export function boxAround(lat, lon) {
-  return {
-    south: Math.max(-89, lat - 1),
-    north: Math.min(89, lat + 1),
-    west: Math.max(-179.9, lon - 1),
-    east: Math.min(179.9, lon + 1),
-  };
+  return boxOfSize(lat, lon, 2);
 }

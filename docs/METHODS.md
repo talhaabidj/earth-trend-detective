@@ -18,6 +18,11 @@ This page explains every step from NASA data to the verdict, the checks we ran, 
   SYN1deg after. A jump at the join could look like a trend, so for these two variables the tool
   only uses 2001 onward.
 
+- **NDVI limits:** we do not apply the MODIS pixel-quality layer (only the fill value and the valid
+  range), so some cloudy or hazy pixels may remain; the median over about 400 pixels limits their
+  effect. Terra's orbit has drifted since about 2022, which shifts its overpass time a little. The
+  Lahore window is a 5 km × 5 km square in the city centre, not the whole city.
+
 ## 2. Removing the seasons
 
 For each calendar month we compute the average over the record (the *climatology*) and subtract it
@@ -69,11 +74,22 @@ Honesty note: we could not open the full text of Weatherhead et al. (1998) durin
 formula above is the form widely quoted from that paper; we have not checked it against the
 original page.
 
-## 5. Checks we ran
+## 5. Where is it changing? (the trend map)
+
+The map downloads every POWER grid cell in a 6° or 10° box (up to about 340 cells) and runs both
+tests on each cell. Testing hundreds of cells at the 5% level would make about 1 in 20 look
+significant by chance, so we apply the Benjamini-Hochberg false discovery check (5%) to each test's
+p-values across all cells. A cell is a "clear" rise or fall only if it passes for both tests;
+"maybe" if it passes for one. Neighbouring cells are positively correlated, a case in which the
+Benjamini-Hochberg check is still valid (Benjamini & Yekutieli 2001).
+
+## 6. Checks we ran
 
 All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push in GitHub Actions:
 
 - Mann-Kendall S, variance, z and p match the `pymannkendall` library (v1.4.3) exactly, including ties.
+- The Sen slope and its 95% range match SciPy's independent `theilslopes` exactly on test series
+  (checked by hand on 14 Nov; see the review notes).
 - Seasonal Mann-Kendall and the seasonal Sen slope match `pymannkendall`.
 - A synthetic series with a known trend of 0.05 per year is recovered within its 95% intervals.
 - Pure noise gives no significant trend.
@@ -85,7 +101,7 @@ All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push 
 - Every demo example states the verdict it expects; `engine/scripts/build_examples.py` stops if the
   data gives a different one, so the story text cannot disagree with the numbers.
 
-## 6. Limits
+## 7. Limits
 
 - POWER is a model-based product at about 50 km, not a weather station. City-scale effects (such as
   a city's own heat island) are smoothed out.
@@ -97,6 +113,8 @@ All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push 
 
 ## References
 
+- Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. *Journal of the Royal Statistical Society B*, 57(1), 289–300.
+- Benjamini, Y., & Yekutieli, D. (2001). The control of the false discovery rate in multiple testing under dependency. *Annals of Statistics*, 29(4), 1165–1188.
 - Gilbert, R. O. (1987). *Statistical Methods for Environmental Pollution Monitoring.* Van Nostrand Reinhold.
 - Hirsch, R. M., Slack, J. R., & Smith, R. A. (1982). Techniques of trend analysis for monthly water quality data. *Water Resources Research*, 18(1), 107–121.
 - Hussain, M., & Mahmud, I. (2019). pyMannKendall: a python package for non parametric Mann Kendall family of trend tests. *Journal of Open Source Software*, 4(39), 1556.

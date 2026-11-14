@@ -21,6 +21,7 @@ LAST_YEAR = 2025
 PLACES = {
     "Jacobabad": (28.28, 68.44),
     "Lahore": (31.55, 74.34),
+    "central Lahore": (31.55, 74.34),
     "Phoenix": (33.45, -112.07),
     "Hunza": (36.32, 74.65),
     "Thar desert": (25.0, 70.0),
@@ -84,13 +85,13 @@ STORIES = [
     {
         "id": "greener-from-space",
         "title": "Greener from space",
-        "teaser": "The MODIS satellite sees the land around Lahore and in the Thar desert getting greener.",
+        "teaser": "The MODIS satellite sees central Lahore and a spot in the Thar desert getting greener.",
         "steps": [
             {
-                "text": "NDVI measures how green the land looks from NASA's Terra satellite (MODIS instrument). Since "
-                        "2000, both the area around Lahore (left) and a spot in the Thar desert (right) have become "
-                        "clearly greener.",
-                "panels": [("Lahore", "NDVI", "clear"), ("Thar desert", "NDVI", "clear")],
+                "text": "NDVI measures how green the land looks from NASA's Terra satellite (MODIS instrument). Each "
+                        "panel is a 5 km x 5 km window. Since 2000, both central Lahore (left) and a spot in the "
+                        "Thar desert (right) have become clearly greener.",
+                "panels": [("central Lahore", "NDVI", "clear"), ("Thar desert", "NDVI", "clear")],
             },
             {
                 "text": "A second, independent NASA source agrees for the Thar desert: surface soil wetness from the "
@@ -134,7 +135,7 @@ def build_panel(place, variable, expected_verdict):
         "lat": lat,
         "lon": lon,
         "variable": variable,
-        "label": f"{place} ({lat:.2f}°, {lon:.2f}°)",
+        "label": f"{place} ({lat:.2f}°, {lon:.2f}°)" + (", 5 km x 5 km window" if variable == "NDVI" else ""),
         "source_url": source_url,
         "source_info": info,
         "cells": 1,

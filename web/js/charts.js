@@ -31,10 +31,10 @@ function tickLabel(value) {
 }
 
 // Creates the SVG and works out the drawing area.
-function newChart(container, height) {
+function newChart(container, height, description) {
   container.replaceChildren();
   const width = Math.max(container.clientWidth, 280);
-  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width: "100%", height, role: "img", class: "chart" });
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width: "100%", height, role: "img", class: "chart", "aria-label": description });
   container.appendChild(svg);
   return {
     svg, width, height,
@@ -120,8 +120,8 @@ function linePath(points, xOf, yOf) {
 // trend (optional): {slope, low, high} per year, drawn through y = 0 at the middle of the record,
 //   with the range between the low and high slopes shaded.
 // yearly (optional): yearly averages drawn as dots on top of a faded monthly line.
-export function lineChart(container, { points, units, decimals = 2, height = 240, zeroLine = false, trend = null, yearly = null }) {
-  const chart = newChart(container, height);
+export function lineChart(container, { points, units, decimals = 2, height = 240, zeroLine = false, trend = null, yearly = null, description = "" }) {
+  const chart = newChart(container, height, description);
   const valid = points.filter(hasValue);
   if (!valid.length) return;
 
@@ -179,8 +179,8 @@ export function lineChart(container, { points, units, decimals = 2, height = 240
 }
 
 // Twelve bars, one per calendar month. usual[0] is January.
-export function monthBars(container, { usual, units, decimals = 2, height = 180 }) {
-  const chart = newChart(container, height);
+export function monthBars(container, { usual, units, decimals = 2, height = 180, description = "" }) {
+  const chart = newChart(container, height, description);
   const values = usual.filter(Number.isFinite);
   let minY = Math.min(0, ...values);
   let maxY = Math.max(0, ...values);
@@ -199,8 +199,8 @@ export function monthBars(container, { usual, units, decimals = 2, height = 180 
     if (!Number.isFinite(value)) return;
     const base = yOf(0);
     const end = yOf(value);
-    const height = Math.max(1, Math.abs(end - base));
-    const radius = Math.min(4, height / 2, barWidth / 2);
+    const barHeight = Math.max(1, Math.abs(end - base));
+    const radius = Math.min(4, barHeight / 2, barWidth / 2);
     const x = xOf(month) - barWidth / 2;
     // Rounded at the value end, square at the zero line.
     const path = value >= 0

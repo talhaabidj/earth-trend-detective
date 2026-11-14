@@ -18,6 +18,7 @@
       <nav class="top-nav">
         <a href="#examples">Watch an example</a>
         <a href="#explore">Explore any place</a>
+        <a href="#map-trends">Where is it changing?</a>
         <a href="#methods">How it works</a>
       </nav>
     </div>
@@ -68,6 +69,26 @@
       <div id="results" hidden></div>
     </section>
 
+    <section id="map-trends" class="panel" aria-labelledby="map-title">
+      <h2 id="map-title">Where is it changing?</h2>
+      <p class="muted">Test every grid cell around your place at once, for the question you chose above. Click a cell to see its full result.</p>
+      <div class="place-row">
+        <label>Area
+          <select id="map-size">
+            <option value="6">6° × 6° (about 650 km across)</option>
+            <option value="10">10° × 10° (about 1,100 km across)</option>
+          </select>
+        </label>
+        <button id="map-run" class="primary" type="button">Map the trend</button>
+        <span id="map-status" class="status" aria-live="polite"></span>
+      </div>
+      <p id="map-question" class="map-question"></p>
+      <div id="trend-map" class="map tall" aria-label="Map of trends. Each square is one grid cell."></div>
+      <div id="map-legend"></div>
+      <p id="map-summary" class="map-summary" aria-live="polite"></p>
+      <p class="source">Each cell is tested on its own. Because so many cells are tested at once, a cell only counts as a clear trend if it also passes a false discovery check (Benjamini-Hochberg, 5%), so chance results are filtered out. <span id="map-source"></span></p>
+    </section>
+
     <section id="methods" class="panel prose" aria-labelledby="methods-title">
       <h2 id="methods-title">How it works</h2>
       <ol>
@@ -75,6 +96,7 @@
         <li><strong>Seasons removed.</strong> We work out each month's usual value and subtract it, so a hot summer is not mistaken for warming. These differences are the <em>anomalies</em>.</li>
         <li><strong>Test 1: seasonal Mann-Kendall.</strong> Compares every January with every other January (and so on). It only asks "up or down?", so outliers do not fool it. Its rate is the median (Sen) slope.</li>
         <li><strong>Test 2: least-squares on anomalies.</strong> Fits a straight line, but counts fewer independent months when one month's value carries over into the next (autocorrelation). Without this, many trends look more certain than they are.</li>
+        <li><strong>Many tests at once.</strong> The map tests hundreds of grid cells, so it filters out chance results with a false discovery check (Benjamini-Hochberg).</li>
         <li><strong>Verdict.</strong> "Yes" only when both tests agree at the 5% level. "Maybe" when they disagree. "Not significant yet" comes with an estimate of how many more years of data would settle it (Weatherhead et al., 1998).</li>
       </ol>
       <p>Limits: POWER is a model-based product at about 50 km, not a weather station. A trend is a straight-line summary; real changes can speed up, slow down or jump. The tool finds change; it does not by itself prove the cause.</p>
@@ -85,8 +107,8 @@
   <footer class="site-footer">
     <div class="wrap">
       <p>Made at NASA Space Apps 2026 by Ludilume Studios (Talha Abid, Kainat Ijaz). Open source under the MIT licence: <a href="https://github.com/talhaabidj/earth-trend-detective">source code</a>.</p>
-      <p><strong>Use of SI:</strong> the code was written with help from Claude Code (an SI coding assistant) under the team's direction. No SI runs in this page: every number comes from NASA data and the code you can read. <a href="https://github.com/talhaabidj/earth-trend-detective/blob/main/docs/AI_USE.md">Details</a>.</p>
-      <p>Data: NASA POWER (NASA Langley Research Center). Map: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, via Leaflet. Not an official NASA product.</p>
+      <p><strong>Use of SI:</strong> most of the code and text, and the written concept, were produced by Claude Code (an SI assistant) at the team's request and under its direction. No SI runs in this page: every number comes from NASA data and code you can read. <a href="https://github.com/talhaabidj/earth-trend-detective/blob/main/docs/AI_USE.md">Full details</a>.</p>
+      <p>The data was obtained from National Aeronautics and Space Administration (NASA) Langley Research Center's Prediction Of Worldwide Energy Resources (POWER) project funded through the NASA Earth Science Division. Greenness: MODIS MOD13Q1 v6.1 (Didan, 2021, NASA LP DAAC) via the ORNL DAAC MODIS Web Service. Map: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, via Leaflet. <a href="https://github.com/talhaabidj/earth-trend-detective/blob/main/docs/DATA_SOURCES.md">All sources</a>. Not an official NASA product.</p>
     </div>
   </footer>
 

@@ -4,6 +4,12 @@ The Space Apps terms ask us to cite every resource, open source or not. This is 
 
 ## NASA data
 
+**NASA POWER acknowledgement** (the wording POWER asks for): The data was obtained from National
+Aeronautics and Space Administration (NASA) Langley Research Center's Prediction Of Worldwide Energy
+Resources (POWER) project funded through the NASA Earth Science Division. Data reference: POWER
+Monthly and Annual API v2.10.0, accessed 14 November 2026 (the live explorer downloads the current
+version each time it runs).
+
 | Data | What we use | Access | Licence / terms |
 |---|---|---|---|
 | NASA POWER (Prediction Of Worldwide Energy Resources), NASA Langley Research Center, monthly temporal API | 14 variables (temperature, rain, humidity, soil wetness, evaporation, wind, sunlight, cloud, snow, frost days), 1981–2025 | https://power.larc.nasa.gov/api/temporal/monthly/ (no login) | NASA open data, free to use; POWER asks users to acknowledge the source |

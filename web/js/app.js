@@ -1,9 +1,10 @@
 // The explorer: pick a place and a variable, get NASA POWER data, test for a trend, show it.
 
 import { THEMES, VARIABLES, PLACE_TYPES, findVariable } from "./catalogue.js";
-import { getMonthlyData, boxAround } from "./power.js";
+import { getMonthlyData, boxAround, boxOfSize } from "./power.js";
 import { showResult } from "./result-view.js";
 import { showStoryList } from "./stories.js";
+import { mapTrends } from "./trend-map.js";
 
 const QUICK_PLACES = [
   { name: "Lahore", lat: 31.55, lon: 74.34 },
@@ -291,6 +292,50 @@ async function runTest() {
   }
 }
 
+// --- Where is it changing? (the trend map) --------------------------------------------------
+
+let trendMap = null;
+let trendLayer = null;
+
+function setUpTrendMap() {
+  if (!window.L) return;
+  trendMap = L.map("trend-map", { worldCopyJump: true }).setView([choice.lat, choice.lon], 5);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 10,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(trendMap);
+  trendLayer = L.layerGroup().addTo(trendMap);
+  byId("map-run").addEventListener("click", runTrendMap);
+}
+
+async function runTrendMap() {
+  if (!trendMap) return;
+  const variable = findVariable(choice.variableId);
+  const size = Number(byId("map-size").value);
+  const button = byId("map-run");
+  const status = byId("map-status");
+  button.disabled = true;
+  status.className = "status";
+  status.textContent = "Asking NASA POWER for every grid cell (this can take 10 seconds)…";
+  byId("map-question").textContent = `${variable.name}, ${variable.startYear}–2025, ${size}° × ${size}° around ${placeLabel()}`;
+  try {
+    const box = boxOfSize(choice.lat, choice.lon, size);
+    const map = await mapTrends(trendMap, trendLayer, variable, box, (lat, lon) => {
+      setPlace(lat, lon);
+      runTest();
+    });
+    byId("map-summary").textContent = map.summary;
+    byId("map-legend").innerHTML = map.legend;
+    byId("map-source").innerHTML = `Data: ${variable.source}. <a href="${map.url}" target="_blank" rel="noopener">See the exact data request</a>.`;
+    status.textContent = "";
+  } catch (error) {
+    status.className = "status error";
+    status.textContent = `Could not get the data: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function start() {
   const linkHasResult = readChoiceFromLink();
   setUpMap();
@@ -300,6 +345,7 @@ function start() {
   showThemes();
   showVariables();
   byId("run").addEventListener("click", runTest);
+  setUpTrendMap();
   showStoryList(byId("story-list"), byId("story-player"));
   if (linkHasResult) runTest();
 }

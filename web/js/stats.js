@@ -31,7 +31,7 @@ function erf(x) {
   return Math.sign(x) * (1 - tail);
 }
 
-export function twoSidedPFromZ(z) {
+function twoSidedPFromZ(z) {
   return 2 * (1 - 0.5 * (1 + erf(Math.abs(z) / Math.SQRT2)));
 }
 
@@ -75,7 +75,7 @@ function betaFraction(a, b, x) {
   return result;
 }
 
-export function tTwoSidedP(t, degrees) {
+function tTwoSidedP(t, degrees) {
   return incompleteBeta(degrees / (degrees + t * t), degrees / 2, 0.5);
 }
 
@@ -93,7 +93,7 @@ function t95(degrees) {
 
 // --- Test 1: seasonal Mann-Kendall ---------------------------------------------------------
 
-export function mannKendallScore(values) {
+function mannKendallScore(values) {
   const valid = values.filter((v) => !isMissing(v));
   const count = valid.length;
   let score = 0;
@@ -169,7 +169,7 @@ function seasonalSenSlope(rows, mkVariance) {
 // --- Seasons and anomalies ------------------------------------------------------------------
 
 // Average value for each calendar month. Index 0 is January.
-export function usualMonthValues(rows) {
+function usualMonthValues(rows) {
   return rowsByMonth(rows).map((list) =>
     (list.length ? list.reduce((sum, r) => sum + r.value, 0) / list.length : NaN));
 }
@@ -227,7 +227,7 @@ function lineTest(times, anomalyValues) {
 // --- How many more years? -------------------------------------------------------------------
 
 // Weatherhead et al. (1998): years of monthly data for a 90% chance of a significant result.
-export function yearsNeeded(noiseSd, slopePerYear, autocorrelation) {
+function yearsNeeded(noiseSd, slopePerYear, autocorrelation) {
   if (!slopePerYear || Number.isNaN(slopePerYear)) return Infinity;
   const r = Math.min(Math.max(autocorrelation, 0), 0.99);
   return ((3.3 * noiseSd / Math.abs(slopePerYear)) * Math.sqrt((1 + r) / (1 - r))) ** (2 / 3);
