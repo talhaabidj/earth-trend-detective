@@ -1,278 +1,259 @@
-# SI-assisted: written with Claude Code (Anthropic) under the team's direction; see docs/AI_USE.md.
-"""Trend statistics for monthly Earth science series.
+"""Trend tests for monthly data.
 
-Methods: seasonal Mann-Kendall test (Hirsch, Slack & Smith 1982), seasonal Sen slope with a
-confidence interval (Sen 1968; Gilbert 1987), least-squares slope on anomalies with an
-autocorrelation-adjusted sample size (Santer et al. 2000), and the years of data needed to detect
-a trend (Weatherhead et al. 1998). The browser copy in web/js/stats.js must give the same numbers;
-tests/test_js_parity.py checks that.
+A series is a list of (year, month, value) rows. A missing value is None.
+
+We run two tests and only say "yes, there is a trend" when both agree:
+1. Seasonal Mann-Kendall test, with the Sen slope as the rate (Hirsch, Slack and Smith 1982).
+2. A straight-line fit to the anomalies that allows for month-to-month memory (Santer et al. 2000).
+
+web/js/stats.js does the same in the browser. tests/test_js_parity.py checks they agree.
 """
 
-from dataclasses import dataclass, asdict
-from math import erf, sqrt
+import math
 
-import numpy as np
 from scipy import stats as scipy_stats
 
-MONTHS_PER_YEAR = 12
-Z_95 = 1.959963984540054
-MIN_YEARS_FOR_TEST = 10
-MIN_COVERAGE = 0.7
+Z_FOR_95_PERCENT = 1.959963984540054
+MIN_YEARS = 10
+MIN_SHARE_VALID = 0.7
+MAX_MORE_YEARS_FOR_NOT_YET = 50
 
 
-def normal_two_sided_p(z):
-    return 2.0 * (1.0 - 0.5 * (1.0 + erf(abs(z) / sqrt(2.0))))
+def is_missing(value):
+    return value is None or math.isnan(value)
 
 
-def mann_kendall_s_and_var(values):
-    """S statistic and its variance (with tie correction) for one sequence, NaNs dropped."""
-    x = np.asarray([v for v in values if v is not None and not np.isnan(v)], dtype=float)
-    n = len(x)
-    if n < 2:
-        return 0.0, 0.0, n
-    diffs = np.sign(x[None, :] - x[:, None])
-    s = float(np.triu(diffs, k=1).sum())
-    _, tie_counts = np.unique(x, return_counts=True)
-    tie_term = float(np.sum(tie_counts * (tie_counts - 1) * (2 * tie_counts + 5)))
-    var = (n * (n - 1) * (2 * n + 5) - tie_term) / 18.0
-    return s, var, n
+def two_sided_p_from_z(z):
+    return 2 * (1 - 0.5 * (1 + math.erf(abs(z) / math.sqrt(2))))
 
 
-def z_from_s(s, var):
-    if var <= 0:
+# --- Test 1: seasonal Mann-Kendall ---------------------------------------------------------
+
+def mann_kendall_score(values):
+    """Count of rises minus falls over all pairs, and its variance (with the tie correction)."""
+    values = [v for v in values if not is_missing(v)]
+    count = len(values)
+    score = 0
+    for i in range(count):
+        for j in range(i + 1, count):
+            if values[j] > values[i]:
+                score += 1
+            elif values[j] < values[i]:
+                score -= 1
+
+    tie_sizes = {}
+    for v in values:
+        tie_sizes[v] = tie_sizes.get(v, 0) + 1
+    tie_part = sum(t * (t - 1) * (2 * t + 5) for t in tie_sizes.values())
+    variance = (count * (count - 1) * (2 * count + 5) - tie_part) / 18
+    return score, variance
+
+
+def z_score(score, variance):
+    if variance <= 0 or score == 0:
         return 0.0
-    if s > 0:
-        return (s - 1) / sqrt(var)
-    if s < 0:
-        return (s + 1) / sqrt(var)
-    return 0.0
+    if score > 0:
+        return (score - 1) / math.sqrt(variance)
+    return (score + 1) / math.sqrt(variance)
 
 
-def split_by_month(times, values):
-    """Group (year, value) pairs by calendar month. times are (year, month) tuples."""
-    groups = {m: [] for m in range(1, 13)}
-    for (year, month), value in zip(times, values):
-        if value is not None and not np.isnan(value):
-            groups[month].append((year, float(value)))
-    return groups
+def rows_by_month(rows):
+    """Group the rows into 12 lists of (year, value), one per calendar month, missing values left out."""
+    months = {month: [] for month in range(1, 13)}
+    for year, month, value in rows:
+        if not is_missing(value):
+            months[month].append((year, value))
+    for month_rows in months.values():
+        month_rows.sort()
+    return months
 
 
-def seasonal_mann_kendall(times, values):
-    total_s = 0.0
-    total_var = 0.0
-    for month_values in split_by_month(times, values).values():
-        month_values.sort()
-        s, var, _ = mann_kendall_s_and_var([v for _, v in month_values])
-        total_s += s
-        total_var += var
-    z = z_from_s(total_s, total_var)
-    return {"s": total_s, "var_s": total_var, "z": z, "p": normal_two_sided_p(z)}
+def seasonal_mann_kendall(rows):
+    total_score = 0
+    total_variance = 0
+    for month_rows in rows_by_month(rows).values():
+        score, variance = mann_kendall_score([value for _, value in month_rows])
+        total_score += score
+        total_variance += variance
+    z = z_score(total_score, total_variance)
+    return {"score": total_score, "variance": total_variance, "z": z, "p": two_sided_p_from_z(z)}
 
 
-def seasonal_sen_slope(times, values, var_s):
-    """Median of within-month pairwise slopes, in units per year, with a 95% interval."""
+def seasonal_sen_slope(rows, mk_variance):
+    """Median slope (units per year) over all pairs of the same calendar month, with a 95% range."""
     slopes = []
-    for month_values in split_by_month(times, values).values():
-        month_values.sort()
-        for i in range(len(month_values)):
-            year_i, value_i = month_values[i]
-            for j in range(i + 1, len(month_values)):
-                year_j, value_j = month_values[j]
-                if year_j != year_i:
-                    slopes.append((value_j - value_i) / (year_j - year_i))
+    for month_rows in rows_by_month(rows).values():
+        for i in range(len(month_rows)):
+            for j in range(i + 1, len(month_rows)):
+                (year_a, value_a), (year_b, value_b) = month_rows[i], month_rows[j]
+                slopes.append((value_b - value_a) / (year_b - year_a))
     if not slopes:
-        return {"slope": float("nan"), "low": float("nan"), "high": float("nan")}
-    slopes = np.sort(np.asarray(slopes))
+        return {"slope": math.nan, "low": math.nan, "high": math.nan}
+
+    slopes.sort()
     count = len(slopes)
-    c_alpha = Z_95 * sqrt(var_s) if var_s > 0 else 0.0
-    lower_rank = int(round((count - c_alpha) / 2.0))
-    upper_rank = int(round((count + c_alpha) / 2.0)) + 1
-    lower_rank = min(max(lower_rank, 1), count)
-    upper_rank = min(max(upper_rank, 1), count)
-    return {
-        "slope": float(np.median(slopes)),
-        "low": float(slopes[lower_rank - 1]),
-        "high": float(slopes[upper_rank - 1]),
-    }
+    # Gilbert (1987): the 95% range is read from the sorted slopes at these ranks.
+    spread = Z_FOR_95_PERCENT * math.sqrt(mk_variance) if mk_variance > 0 else 0
+    low_rank = min(max(round((count - spread) / 2), 1), count)
+    high_rank = min(max(round((count + spread) / 2) + 1, 1), count)
+    return {"slope": median(slopes), "low": slopes[low_rank - 1], "high": slopes[high_rank - 1]}
 
 
-def monthly_climatology(times, values):
-    climatology = {}
-    for month, month_values in split_by_month(times, values).items():
-        climatology[month] = float(np.mean([v for _, v in month_values])) if month_values else float("nan")
-    return climatology
+def median(sorted_values):
+    middle = len(sorted_values) // 2
+    if len(sorted_values) % 2:
+        return sorted_values[middle]
+    return (sorted_values[middle - 1] + sorted_values[middle]) / 2
 
 
-def anomalies(times, values, climatology):
-    result = []
-    for (_, month), value in zip(times, values):
-        if value is None or np.isnan(value):
-            result.append(float("nan"))
-        else:
-            result.append(float(value) - climatology[month])
-    return result
+# --- Seasons and anomalies ------------------------------------------------------------------
+
+def usual_month_values(rows):
+    """Average value for each calendar month (the seasonal cycle). Key 1 is January."""
+    usual = {}
+    for month, month_rows in rows_by_month(rows).items():
+        values = [value for _, value in month_rows]
+        usual[month] = sum(values) / len(values) if values else math.nan
+    return usual
 
 
-def lag1_autocorrelation(residuals):
-    r = np.asarray(residuals, dtype=float)
-    pairs = [(a, b) for a, b in zip(r[:-1], r[1:]) if not (np.isnan(a) or np.isnan(b))]
+def anomalies(rows, usual):
+    """Each month's value minus the usual value for that month. Missing stays missing (nan)."""
+    return [math.nan if is_missing(value) else value - usual[month] for _, month, value in rows]
+
+
+# --- Test 2: straight line with an autocorrelation correction --------------------------------
+
+def lag1_autocorrelation(values):
+    """How much each month's value is like the month before (0 = not at all, 1 = the same)."""
+    valid = [v for v in values if not math.isnan(v)]
+    pairs = [(a, b) for a, b in zip(values, values[1:]) if not (math.isnan(a) or math.isnan(b))]
     if len(pairs) < 3:
         return 0.0
-    a = np.array([p[0] for p in pairs])
-    b = np.array([p[1] for p in pairs])
-    mean = np.nanmean(r)
-    denominator = np.nansum((r - mean) ** 2)
-    if denominator == 0:
+    mean = sum(valid) / len(valid)
+    spread = sum((v - mean) ** 2 for v in valid)
+    if spread == 0:
         return 0.0
-    return float(np.sum((a - mean) * (b - mean)) / denominator)
+    return sum((a - mean) * (b - mean) for a, b in pairs) / spread
 
 
-def ols_with_autocorrelation(decimal_years, anomaly_values):
-    """Least-squares slope (units per year) with effective n = n(1 - r1)/(1 + r1)."""
-    t = np.asarray(decimal_years, dtype=float)
-    y = np.asarray(anomaly_values, dtype=float)
-    keep = ~np.isnan(y)
-    t, y = t[keep], y[keep]
-    n = len(y)
-    t_mean = t.mean()
-    sxx = np.sum((t - t_mean) ** 2)
-    slope = float(np.sum((t - t_mean) * (y - y.mean())) / sxx)
-    intercept = float(y.mean() - slope * t_mean)
-    residuals_full = np.full(len(keep), np.nan)
-    residuals_full[keep] = y - (intercept + slope * t)
-    r1 = lag1_autocorrelation(residuals_full)
-    r1_used = min(max(r1, 0.0), 0.99)
-    n_eff = n * (1 - r1_used) / (1 + r1_used)
-    residual_sd = float(np.sqrt(np.sum((y - (intercept + slope * t)) ** 2) / (n - 2)))
-    if n_eff > 3:
-        standard_error = residual_sd / np.sqrt(sxx) * np.sqrt((n - 2) / (n_eff - 2))
-        t_stat = slope / standard_error
-        p = float(2 * scipy_stats.t.sf(abs(t_stat), df=n_eff - 2))
-        t_crit = float(scipy_stats.t.ppf(0.975, df=n_eff - 2))
-        low, high = slope - t_crit * standard_error, slope + t_crit * standard_error
-    else:
-        standard_error, p, low, high = float("nan"), float("nan"), float("nan"), float("nan")
+def line_fit(times, values):
+    """Least-squares straight line through the valid points. Returns slope, intercept and sums."""
+    points = [(t, v) for t, v in zip(times, values) if not math.isnan(v)]
+    count = len(points)
+    mean_t = sum(t for t, _ in points) / count
+    mean_v = sum(v for _, v in points) / count
+    spread_t = sum((t - mean_t) ** 2 for t, _ in points)
+    slope = sum((t - mean_t) * (v - mean_v) for t, v in points) / spread_t
+    intercept = mean_v - slope * mean_t
+    return slope, intercept, points, spread_t
+
+
+def line_test(times, anomaly_values):
+    """Straight-line trend (units per year) tested with fewer 'effective' months when the data
+    has month-to-month memory: effective = months x (1 - r) / (1 + r)."""
+    slope, intercept, points, spread_t = line_fit(times, anomaly_values)
+    count = len(points)
+    leftovers = [math.nan if math.isnan(v) else v - (intercept + slope * t) for t, v in zip(times, anomaly_values)]
+    r = lag1_autocorrelation(leftovers)
+    r_used = min(max(r, 0.0), 0.99)
+    effective_months = count * (1 - r_used) / (1 + r_used)
+    noise_sd = math.sqrt(sum((v - (intercept + slope * t)) ** 2 for t, v in points) / (count - 2))
+
+    p, low, high = math.nan, math.nan, math.nan
+    if effective_months > 3:
+        degrees = effective_months - 2
+        standard_error = noise_sd / math.sqrt(spread_t) * math.sqrt((count - 2) / degrees)
+        p = float(2 * scipy_stats.t.sf(abs(slope / standard_error), degrees))
+        t_95 = float(scipy_stats.t.ppf(0.975, degrees))
+        low, high = slope - t_95 * standard_error, slope + t_95 * standard_error
+
     return {
-        "slope": slope,
-        "intercept": intercept,
-        "low": float(low),
-        "high": float(high),
-        "p": p,
-        "r1": r1,
-        "n": int(n),
-        "n_eff": float(n_eff),
-        "residual_sd": residual_sd,
+        "slope": slope, "intercept": intercept, "low": low, "high": high, "p": p,
+        "autocorrelation": r, "effective_months": effective_months, "noise_sd": noise_sd,
     }
 
 
-def years_to_detect(noise_sd, trend_per_year, phi):
-    """Weatherhead et al. (1998), eq. 3: years of monthly data for a 90% chance of detecting
-    the trend at the 5% level, given monthly noise sd and lag-1 autocorrelation phi."""
-    if trend_per_year == 0 or np.isnan(trend_per_year):
-        return float("inf")
-    phi = min(max(phi, 0.0), 0.99)
-    return float(((3.3 * noise_sd / abs(trend_per_year)) * sqrt((1 + phi) / (1 - phi))) ** (2.0 / 3.0))
+# --- How many more years? -------------------------------------------------------------------
+
+def years_needed(noise_sd, slope_per_year, autocorrelation):
+    """Weatherhead et al. (1998): years of monthly data for a 90% chance of a significant
+    result (5% level) if the trend keeps going at this rate."""
+    if slope_per_year == 0 or math.isnan(slope_per_year):
+        return math.inf
+    r = min(max(autocorrelation, 0.0), 0.99)
+    return ((3.3 * noise_sd / abs(slope_per_year)) * math.sqrt((1 + r) / (1 - r))) ** (2 / 3)
 
 
-@dataclass
-class TrendResult:
-    n_months: int
-    n_valid: int
-    first_year: int
-    last_year: int
-    record_years: float
-    coverage: float
-    mk_s: float
-    mk_z: float
-    mk_p: float
-    sen_slope_per_year: float
-    sen_low_per_year: float
-    sen_high_per_year: float
-    ols_slope_per_year: float
-    ols_low_per_year: float
-    ols_high_per_year: float
-    ols_p: float
-    lag1_autocorrelation: float
-    effective_n: float
-    noise_sd: float
-    years_needed: float
-    extra_years_needed: float
-    verdict: str
-    flags: list
+# --- Putting it together --------------------------------------------------------------------
 
-    def to_dict(self):
-        return asdict(self)
-
-
-def decide_verdict(mk_p, ols_p, record_years, coverage, extra_years_needed):
-    """One of: rising/falling (clear), mixed, not_yet, none, too_short."""
-    if record_years < MIN_YEARS_FOR_TEST or coverage < MIN_COVERAGE:
+def pick_verdict(mk_p, line_p, years_of_data, share_valid, more_years):
+    if years_of_data < MIN_YEARS or share_valid < MIN_SHARE_VALID:
         return "too_short"
-    mk_significant = mk_p < 0.05
-    ols_significant = not np.isnan(ols_p) and ols_p < 0.05
-    if mk_significant and ols_significant:
+    mk_says_yes = mk_p < 0.05
+    line_says_yes = not math.isnan(line_p) and line_p < 0.05
+    if mk_says_yes and line_says_yes:
         return "clear"
-    if mk_significant or ols_significant:
+    if mk_says_yes or line_says_yes:
         return "mixed"
-    if extra_years_needed <= 50:
+    if more_years <= MAX_MORE_YEARS_FOR_NOT_YET:
         return "not_yet"
     return "none"
 
 
-def analyse(times, values):
-    """Full analysis of a monthly series. times: list of (year, month); values: floats or None."""
-    clean = [float("nan") if v is None else float(v) for v in values]
-    n_months = len(clean)
-    valid = [v for v in clean if not np.isnan(v)]
-    first_year, last_year = times[0][0], times[-1][0]
-    record_years = n_months / MONTHS_PER_YEAR
-    coverage = len(valid) / n_months if n_months else 0.0
+def analyse(rows):
+    """Run both tests on (year, month, value) rows. Returns (result, usual month values, anomalies)."""
+    rows = [(year, month, math.nan if value is None else float(value)) for year, month, value in rows]
+    months = len(rows)
+    valid_months = sum(not math.isnan(value) for _, _, value in rows)
+    years_of_data = months / 12
+    share_valid = valid_months / months if months else 0.0
 
-    mk = seasonal_mann_kendall(times, clean)
-    sen = seasonal_sen_slope(times, clean, mk["var_s"])
-    climatology = monthly_climatology(times, clean)
-    anomaly_values = anomalies(times, clean, climatology)
-    decimal_years = [year + (month - 0.5) / 12.0 for year, month in times]
-    ols = ols_with_autocorrelation(decimal_years, anomaly_values)
+    mk = seasonal_mann_kendall(rows)
+    sen = seasonal_sen_slope(rows, mk["variance"])
+    usual = usual_month_values(rows)
+    anomaly_values = anomalies(rows, usual)
+    times = [year + (month - 0.5) / 12 for year, month, _ in rows]
+    line = line_test(times, anomaly_values)
 
-    # Weatherhead et al. is a regression method, and the Sen slope is often exactly 0 for
-    # rounded or zero-heavy data, so the least-squares slope is used here.
-    needed = years_to_detect(ols["residual_sd"], ols["slope"], ols["r1"])
-    extra = max(0.0, needed - record_years)
+    # The straight-line slope is used here: the Weatherhead method is built on it, and the Sen
+    # slope is often exactly 0 for rounded data.
+    needed = years_needed(line["noise_sd"], line["slope"], line["autocorrelation"])
+    more_years = max(0.0, needed - years_of_data)
 
-    flags = []
-    if record_years < MIN_YEARS_FOR_TEST:
-        flags.append("short_record")
-    if coverage < MIN_COVERAGE:
-        flags.append("low_coverage")
-    if ols["r1"] > 0.5:
-        flags.append("strong_autocorrelation")
-    if sen["slope"] == 0 and ols["slope"] != 0:
-        flags.append("median_slope_zero")
+    warnings = []
+    if years_of_data < MIN_YEARS:
+        warnings.append("short_record")
+    if share_valid < MIN_SHARE_VALID:
+        warnings.append("many_missing")
+    if line["autocorrelation"] > 0.5:
+        warnings.append("strong_memory")
+    if sen["slope"] == 0 and line["slope"] != 0:
+        warnings.append("median_slope_zero")
 
-    verdict = decide_verdict(mk["p"], ols["p"], record_years, coverage, extra)
-    return TrendResult(
-        n_months=n_months,
-        n_valid=len(valid),
-        first_year=first_year,
-        last_year=last_year,
-        record_years=record_years,
-        coverage=coverage,
-        mk_s=mk["s"],
-        mk_z=mk["z"],
-        mk_p=mk["p"],
-        sen_slope_per_year=sen["slope"],
-        sen_low_per_year=sen["low"],
-        sen_high_per_year=sen["high"],
-        ols_slope_per_year=ols["slope"],
-        ols_low_per_year=ols["low"],
-        ols_high_per_year=ols["high"],
-        ols_p=ols["p"],
-        lag1_autocorrelation=ols["r1"],
-        effective_n=ols["n_eff"],
-        noise_sd=ols["residual_sd"],
-        years_needed=needed,
-        extra_years_needed=extra,
-        verdict=verdict,
-        flags=flags,
-    ), climatology, anomaly_values
+    result = {
+        "months": months,
+        "valid_months": valid_months,
+        "first_year": rows[0][0],
+        "last_year": rows[-1][0],
+        "years_of_data": years_of_data,
+        "share_valid": share_valid,
+        "mk_score": mk["score"],
+        "mk_z": mk["z"],
+        "mk_p": mk["p"],
+        "sen_slope": sen["slope"],
+        "sen_low": sen["low"],
+        "sen_high": sen["high"],
+        "line_slope": line["slope"],
+        "line_low": line["low"],
+        "line_high": line["high"],
+        "line_p": line["p"],
+        "autocorrelation": line["autocorrelation"],
+        "effective_months": line["effective_months"],
+        "noise_sd": line["noise_sd"],
+        "years_needed": needed,
+        "more_years_needed": more_years,
+        "verdict": pick_verdict(mk["p"], line["p"], years_of_data, share_valid, more_years),
+        "warnings": warnings,
+    }
+    return result, usual, anomaly_values

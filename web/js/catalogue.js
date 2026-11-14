@@ -1,6 +1,5 @@
-// SI-assisted: written with Claude Code (Anthropic) under the team's direction; see docs/AI_USE.md.
-// Variables the tool offers, with plain definitions. All come from NASA POWER (monthly, ~50 km grid).
-// "source" is what POWER reports for the variable; "startYear" avoids joins between products.
+// The variables the tool offers, with plain definitions.
+// "source" is where the data comes from. "startYear" is the first year we use.
 
 export const THEMES = [
   { id: "heat", label: "Heat", question: "Is it getting hotter?" },
@@ -9,8 +8,8 @@ export const THEMES = [
   { id: "cold", label: "Snow and cold", question: "Is winter changing?" },
 ];
 
-const MERRA2 = "MERRA-2 (NASA GMAO reanalysis: a model that blends satellite and ground data)";
-const CERES = "CERES SYN1deg (NASA satellite instruments), from 2001";
+const MERRA2 = "NASA POWER, from MERRA-2 (a NASA model that blends satellite and ground measurements)";
+const CERES = "NASA POWER, from CERES SYN1deg (NASA satellite instruments), 2001 onward";
 
 export const VARIABLES = [
   {
@@ -44,13 +43,13 @@ export const VARIABLES = [
     source: MERRA2 + " (bias-corrected precipitation, PRECTOTCORR)", startYear: 1981,
   },
   {
-    id: "GWETTOP", theme: "water", name: "Surface soil wetness", units: "0–1", decimals: 3,
+    id: "GWETTOP", theme: "water", name: "Surface soil wetness", units: "", decimals: 3,
     plain: "How wet the top 5 cm of soil is: 0 is completely dry, 1 is completely soaked.",
     why: "Reacts quickly to rain and heat. A drying surface can mean drought risk.",
     source: MERRA2, startYear: 1981,
   },
   {
-    id: "GWETROOT", theme: "water", name: "Root-zone soil wetness", units: "0–1", decimals: 3,
+    id: "GWETROOT", theme: "water", name: "Root-zone soil wetness", units: "", decimals: 3,
     plain: "How wet the soil is down to about 1 metre, where plant roots drink.",
     why: "Plants and crops depend on it. It changes more slowly than surface wetness.",
     source: MERRA2, startYear: 1981,
@@ -100,17 +99,17 @@ export const VARIABLES = [
     why: "Fewer frost days is a sign of milder winters; it matters for crops and pests.",
     source: MERRA2, startYear: 1981,
   },
+  {
+    id: "NDVI", theme: "green", examplesOnly: true, name: "Vegetation greenness (NDVI)", units: "", decimals: 3,
+    plain: "How green and leafy the land looks from space: near 0 is bare ground, near 0.8 is thick, healthy plants.",
+    why: "Shows crops, forests and deserts changing.",
+    source: "MODIS on NASA's Terra satellite (MOD13Q1 v6.1, 250 m), from the ORNL DAAC MODIS Web Service",
+    startYear: 2000,
+    // Too slow to download live (20-40 seconds per request), so it is only in the examples.
+  },
 ];
 
-// Satellite variables used in the precomputed examples only (the service is too slow for live use).
-VARIABLES.push({
-  id: "NDVI", theme: "green", storyOnly: true, name: "Vegetation greenness (NDVI)", units: "index", decimals: 3,
-  plain: "How green and leafy the land looks from space: near 0 is bare ground, near 0.8 is dense healthy plants.",
-  why: "Shows crops, forests and deserts changing.",
-  source: "MODIS on NASA's Terra satellite (MOD13Q1 v6.1, 250 m), via the ORNL DAAC MODIS Web Service", startYear: 2000,
-});
-
-// Simple place-type helper (rules, not SI): suggests where to start for a kind of place.
+// Where to start for a kind of place. Simple fixed rules, no SI.
 export const PLACE_TYPES = [
   { id: "city", label: "A big city", suggest: ["T2M_MIN", "RH2M", "ALLSKY_SFC_SW_DWN"],
     reason: "Cities trap heat at night, and haze can cut sunlight." },

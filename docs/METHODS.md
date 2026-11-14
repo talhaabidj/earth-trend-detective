@@ -1,7 +1,5 @@
 # Methods
 
-SI-assisted: drafted with Claude Code (Anthropic) and reviewed by the team; see [AI_USE.md](AI_USE.md).
-
 This page explains every step from NASA data to the verdict, the checks we ran, and the limits.
 
 ## 1. Data
@@ -83,7 +81,9 @@ All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push 
 - Years-to-detect grows with noise and autocorrelation.
 - POWER's month 13 and -999 values are removed; the area average uses cos(latitude).
 - The browser copy (`web/js/stats.js`) gives the same numbers as the Python engine on three test
-  series, including gaps (parity test runs the JavaScript through Node).
+  series, including gaps (the test runs the JavaScript through Node).
+- Every demo example states the verdict it expects; `engine/scripts/build_examples.py` stops if the
+  data gives a different one, so the story text cannot disagree with the numbers.
 
 ## 6. Limits
 

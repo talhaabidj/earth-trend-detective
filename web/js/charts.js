@@ -1,174 +1,214 @@
-// SI-assisted: written with Claude Code (Anthropic) under the team's direction; see docs/AI_USE.md.
-// Small SVG charts with a hover tooltip. Colours come from CSS variables in css/app.css.
+// Small SVG line and bar charts with a hover tooltip. Colours come from css/app.css.
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const SVG = "http://www.w3.org/2000/svg";
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MARGIN = { top: 12, right: 16, bottom: 28, left: 52 };
 
-function el(name, attrs = {}, parent) {
-  const node = document.createElementNS(SVG_NS, name);
-  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
-  if (parent) parent.appendChild(node);
-  return node;
+function svgElement(name, attributes, parent) {
+  const element = document.createElementNS(SVG, name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+  if (parent) parent.appendChild(element);
+  return element;
 }
 
-function niceTicks(min, max, count = 5) {
+const hasValue = (point) => point.y !== null && Number.isFinite(point.y);
+
+// Round tick values (1, 2, 2.5 or 5 times a power of ten) between min and max.
+function tickValues(min, max, wanted = 5) {
   const span = max - min || 1;
-  const step0 = span / count;
-  const power = 10 ** Math.floor(Math.log10(step0));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((s) => span / s <= count) || step0;
+  const power = 10 ** Math.floor(Math.log10(span / wanted));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((s) => span / s <= wanted);
   const ticks = [];
-  for (let t = Math.ceil(min / step) * step; t <= max + step * 1e-9; t += step) ticks.push(+t.toFixed(10));
+  for (let t = Math.ceil(min / step) * step; t <= max + step * 1e-9; t += step) ticks.push(Number(t.toFixed(10)));
   return ticks;
 }
 
-function formatTick(value) {
-  const abs = Math.abs(value);
-  if (abs >= 1000) return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  if (abs >= 10 || value === 0) return String(+value.toFixed(1));
-  return String(+value.toFixed(abs < 0.1 ? 3 : 2));
+function tickLabel(value) {
+  const size = Math.abs(value);
+  if (size >= 1000) return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (size >= 10 || value === 0) return String(Number(value.toFixed(1)));
+  return String(Number(value.toFixed(size < 0.1 ? 3 : 2)));
 }
 
-function frame(container, height) {
+// Creates the SVG and works out the drawing area.
+function newChart(container, height) {
   container.replaceChildren();
   const width = Math.max(container.clientWidth, 280);
-  const margin = { top: 12, right: 16, bottom: 28, left: 52 };
-  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width: "100%", height, role: "img", class: "chart" });
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width: "100%", height, role: "img", class: "chart" });
   container.appendChild(svg);
-  return { svg, width, height, margin, innerW: width - margin.left - margin.right, innerH: height - margin.top - margin.bottom };
+  return {
+    svg, width, height,
+    left: MARGIN.left, right: width - MARGIN.right, top: MARGIN.top, bottom: height - MARGIN.bottom,
+  };
 }
 
-function drawAxes(f, xScale, yScale, xTicks, yTicks, xFormat) {
-  const grid = el("g", { class: "grid" }, f.svg);
-  for (const t of yTicks) {
-    const y = yScale(t);
-    el("line", { x1: f.margin.left, x2: f.width - f.margin.right, y1: y, y2: y }, grid);
-    const label = el("text", { x: f.margin.left - 8, y: y + 4, "text-anchor": "end", class: "tick" }, f.svg);
-    label.textContent = formatTick(t);
+function drawAxes(chart, xOf, yOf, xTicks, yTicks, xLabel) {
+  const grid = svgElement("g", { class: "grid" }, chart.svg);
+  for (const tick of yTicks) {
+    svgElement("line", { x1: chart.left, x2: chart.right, y1: yOf(tick), y2: yOf(tick) }, grid);
+    const label = svgElement("text", { x: chart.left - 8, y: yOf(tick) + 4, "text-anchor": "end", class: "tick" }, chart.svg);
+    label.textContent = tickLabel(tick);
   }
-  for (const t of xTicks) {
-    const label = el("text", { x: xScale(t), y: f.height - 8, "text-anchor": "middle", class: "tick" }, f.svg);
-    label.textContent = xFormat(t);
+  for (const tick of xTicks) {
+    const label = svgElement("text", { x: xOf(tick), y: chart.height - 8, "text-anchor": "middle", class: "tick" }, chart.svg);
+    label.textContent = xLabel(tick);
   }
 }
 
-function addTooltip(container, f, points, xScale, yScale, describePoint) {
-  const tip = document.createElement("div");
-  tip.className = "chart-tip";
-  tip.hidden = true;
-  container.appendChild(tip);
-  const cross = el("line", { class: "crosshair", y1: f.margin.top, y2: f.height - f.margin.bottom }, f.svg);
-  const dot = el("circle", { r: 5, class: "hover-dot" }, f.svg);
-  cross.style.display = dot.style.display = "none";
-  const hit = el("rect", { x: f.margin.left, y: f.margin.top, width: f.innerW, height: f.innerH, fill: "transparent" }, f.svg);
-  const valid = points.filter((p) => p.y !== null && Number.isFinite(p.y));
+// Shows the nearest point's value when the pointer moves over the chart.
+function addHover(container, chart, points, xOf, yOf, tooltipHtml) {
+  const tooltip = document.createElement("div");
+  tooltip.className = "chart-tip";
+  tooltip.hidden = true;
+  container.appendChild(tooltip);
+  const line = svgElement("line", { class: "crosshair", y1: chart.top, y2: chart.bottom }, chart.svg);
+  const dot = svgElement("circle", { r: 5, class: "hover-dot" }, chart.svg);
+  line.style.display = "none";
+  dot.style.display = "none";
+  const area = svgElement("rect", {
+    x: chart.left, y: chart.top, width: chart.right - chart.left, height: chart.bottom - chart.top, fill: "transparent",
+  }, chart.svg);
+  const validPoints = points.filter(hasValue);
 
-  function show(clientX) {
-    const box = f.svg.getBoundingClientRect();
-    const x = (clientX - box.left) * (f.width / box.width);
-    let best = valid[0], bestDist = Infinity;
-    for (const p of valid) {
-      const dist = Math.abs(xScale(p.x) - x);
-      if (dist < bestDist) { best = p; bestDist = dist; }
+  function show(event) {
+    const box = chart.svg.getBoundingClientRect();
+    const x = (event.clientX - box.left) * (chart.width / box.width);
+    let nearest = validPoints[0];
+    for (const point of validPoints) {
+      if (Math.abs(xOf(point.x) - x) < Math.abs(xOf(nearest.x) - x)) nearest = point;
     }
-    if (!best) return;
-    const px = xScale(best.x), py = yScale(best.y);
-    cross.setAttribute("x1", px); cross.setAttribute("x2", px);
-    dot.setAttribute("cx", px); dot.setAttribute("cy", py);
-    cross.style.display = dot.style.display = "";
-    tip.innerHTML = describePoint(best);
-    tip.hidden = false;
-    const left = (px / f.width) * box.width;
-    tip.style.left = `${Math.min(Math.max(left, 60), box.width - 60)}px`;
-    tip.style.top = `${(py / f.height) * box.height - 12}px`;
+    const px = xOf(nearest.x);
+    const py = yOf(nearest.y);
+    line.setAttribute("x1", px);
+    line.setAttribute("x2", px);
+    dot.setAttribute("cx", px);
+    dot.setAttribute("cy", py);
+    line.style.display = "";
+    dot.style.display = "";
+    tooltip.innerHTML = tooltipHtml(nearest);
+    tooltip.hidden = false;
+    const left = (px / chart.width) * box.width;
+    tooltip.style.left = `${Math.min(Math.max(left, 60), box.width - 60)}px`;
+    tooltip.style.top = `${(py / chart.height) * box.height - 12}px`;
   }
-  function hide() { tip.hidden = true; cross.style.display = dot.style.display = "none"; }
-  hit.addEventListener("pointermove", (e) => show(e.clientX));
-  hit.addEventListener("pointerdown", (e) => show(e.clientX));
-  hit.addEventListener("pointerleave", hide);
+  function hide() {
+    tooltip.hidden = true;
+    line.style.display = "none";
+    dot.style.display = "none";
+  }
+  area.addEventListener("pointermove", show);
+  area.addEventListener("pointerdown", show);
+  area.addEventListener("pointerleave", hide);
 }
 
-// points: [{x: decimal year, y, label}]. trend: {slope, intercept, low, high} in units per year,
-// drawn as a line through the data's centre with a shaded 95% range of slopes.
-// yearly: optional [{x, y, label}] drawn as dots joined by a line on top of the faded monthly line.
-export function timeSeriesChart(container, { points, trend, units, decimals = 2, height = 240, zeroLine = false, yearly = null }) {
-  const f = frame(container, height);
-  const valid = points.filter((p) => p.y !== null && Number.isFinite(p.y));
-  if (!valid.length) return;
-  const xMin = points[0].x, xMax = points[points.length - 1].x;
-  let yMin = Math.min(...valid.map((p) => p.y)), yMax = Math.max(...valid.map((p) => p.y));
-  if (zeroLine) { yMin = Math.min(yMin, 0); yMax = Math.max(yMax, 0); }
-  const pad = (yMax - yMin) * 0.08 || 1;
-  yMin -= pad; yMax += pad;
-  const xScale = (x) => f.margin.left + ((x - xMin) / (xMax - xMin || 1)) * f.innerW;
-  const yScale = (y) => f.margin.top + (1 - (y - yMin) / (yMax - yMin)) * f.innerH;
-  const firstYear = Math.ceil(xMin), lastYear = Math.floor(xMax);
-  const yearStep = [1, 2, 5, 10, 20].find((s) => (lastYear - firstYear) / s <= Math.max(3, f.innerW / 80)) || 20;
-  const xTicks = [];
-  for (let y = Math.ceil(firstYear / yearStep) * yearStep; y <= lastYear; y += yearStep) xTicks.push(y);
-  drawAxes(f, xScale, yScale, xTicks, niceTicks(yMin, yMax), (t) => String(t));
+// A line through the points, broken where months are missing.
+function linePath(points, xOf, yOf) {
+  let path = "";
+  let penDown = false;
+  for (const point of points) {
+    if (!hasValue(point)) {
+      penDown = false;
+      continue;
+    }
+    path += `${penDown ? "L" : "M"}${xOf(point.x).toFixed(1)},${yOf(point.y).toFixed(1)}`;
+    penDown = true;
+  }
+  return path;
+}
 
-  if (zeroLine) el("line", { class: "zero", x1: f.margin.left, x2: f.width - f.margin.right, y1: yScale(0), y2: yScale(0) }, f.svg);
+// points: [{x: year with fraction, y, label}]
+// trend (optional): {slope, low, high} per year, drawn through y = 0 at the middle of the record,
+//   with the range between the low and high slopes shaded.
+// yearly (optional): yearly averages drawn as dots on top of a faded monthly line.
+export function lineChart(container, { points, units, decimals = 2, height = 240, zeroLine = false, trend = null, yearly = null }) {
+  const chart = newChart(container, height);
+  const valid = points.filter(hasValue);
+  if (!valid.length) return;
+
+  const firstX = points[0].x;
+  const lastX = points[points.length - 1].x;
+  let minY = Math.min(...valid.map((p) => p.y));
+  let maxY = Math.max(...valid.map((p) => p.y));
+  if (zeroLine) {
+    minY = Math.min(minY, 0);
+    maxY = Math.max(maxY, 0);
+  }
+  const padding = (maxY - minY) * 0.08 || 1;
+  minY -= padding;
+  maxY += padding;
+
+  const xOf = (x) => chart.left + ((x - firstX) / (lastX - firstX || 1)) * (chart.right - chart.left);
+  const yOf = (y) => chart.top + (1 - (y - minY) / (maxY - minY)) * (chart.bottom - chart.top);
+
+  const firstYear = Math.ceil(firstX);
+  const lastYear = Math.floor(lastX);
+  const maxLabels = Math.max(3, (chart.right - chart.left) / 80);
+  const yearStep = [1, 2, 5, 10, 20].find((step) => (lastYear - firstYear) / step <= maxLabels) || 20;
+  const yearTicks = [];
+  for (let year = Math.ceil(firstYear / yearStep) * yearStep; year <= lastYear; year += yearStep) yearTicks.push(year);
+  drawAxes(chart, xOf, yOf, yearTicks, tickValues(minY, maxY), String);
+
+  if (zeroLine) svgElement("line", { class: "zero", x1: chart.left, x2: chart.right, y1: yOf(0), y2: yOf(0) }, chart.svg);
 
   if (trend && Number.isFinite(trend.slope)) {
-    const xMid = valid.reduce((a, p) => a + p.x, 0) / valid.length;
-    const yMid = trend.centre ?? valid.reduce((a, p) => a + p.y, 0) / valid.length;
-    const at = (slope, x) => yMid + slope * (x - xMid);
+    const middleX = (firstX + lastX) / 2;
+    const at = (slope, x) => slope * (x - middleX);
     if (Number.isFinite(trend.low) && Number.isFinite(trend.high)) {
-      const band = [
-        [xMin, at(trend.high, xMin)], [xMid, yMid], [xMax, at(trend.high, xMax)],
-        [xMax, at(trend.low, xMax)], [xMid, yMid], [xMin, at(trend.low, xMin)],
-      ].map(([x, y]) => `${xScale(x)},${yScale(y)}`).join(" ");
-      el("polygon", { points: band, class: "trend-band" }, f.svg);
+      const corners = [
+        [firstX, at(trend.high, firstX)], [middleX, 0], [lastX, at(trend.high, lastX)],
+        [lastX, at(trend.low, lastX)], [middleX, 0], [firstX, at(trend.low, firstX)],
+      ];
+      svgElement("polygon", { points: corners.map(([x, y]) => `${xOf(x)},${yOf(y)}`).join(" "), class: "trend-band" }, chart.svg);
     }
-    el("line", { class: "trend-line", x1: xScale(xMin), y1: yScale(at(trend.slope, xMin)), x2: xScale(xMax), y2: yScale(at(trend.slope, xMax)) }, f.svg);
+    svgElement("line", {
+      class: "trend-line",
+      x1: xOf(firstX), y1: yOf(at(trend.slope, firstX)), x2: xOf(lastX), y2: yOf(at(trend.slope, lastX)),
+    }, chart.svg);
   }
 
-  // Break the line at missing months instead of joining across gaps.
-  let d = "", pen = false;
-  for (const p of points) {
-    if (p.y === null || !Number.isFinite(p.y)) { pen = false; continue; }
-    d += `${pen ? "L" : "M"}${xScale(p.x).toFixed(1)},${yScale(p.y).toFixed(1)}`;
-    pen = true;
-  }
-  el("path", { d, class: yearly ? "series-line faded" : "series-line" }, f.svg);
+  svgElement("path", { d: linePath(points, xOf, yOf), class: yearly ? "series-line faded" : "series-line" }, chart.svg);
 
   if (yearly) {
-    const yd = yearly.filter((p) => Number.isFinite(p.y))
-      .map((p, i) => `${i ? "L" : "M"}${xScale(p.x).toFixed(1)},${yScale(p.y).toFixed(1)}`).join("");
-    el("path", { d: yd, class: "yearly-line" }, f.svg);
-    for (const p of yearly) {
-      if (Number.isFinite(p.y)) el("circle", { cx: xScale(p.x), cy: yScale(p.y), r: 3.5, class: "yearly-dot" }, f.svg);
+    svgElement("path", { d: linePath(yearly, xOf, yOf), class: "yearly-line" }, chart.svg);
+    for (const point of yearly.filter(hasValue)) {
+      svgElement("circle", { cx: xOf(point.x), cy: yOf(point.y), r: 3.5, class: "yearly-dot" }, chart.svg);
     }
   }
 
-  addTooltip(container, f, points, xScale, yScale, (p) =>
-    `<strong>${p.label}</strong><br>${p.y.toFixed(decimals)} ${units}`);
+  addHover(container, chart, points, xOf, yOf, (p) => `<strong>${p.label}</strong><br>${p.y.toFixed(decimals)} ${units}`);
 }
 
-export function seasonChart(container, { climatology, units, decimals = 2, height = 180 }) {
-  const f = frame(container, height);
-  const values = climatology.filter(Number.isFinite);
-  let yMin = Math.min(0, ...values), yMax = Math.max(0, ...values);
-  const pad = (yMax - yMin) * 0.08 || 1;
-  if (yMax > 0) yMax += pad;
-  if (yMin < 0) yMin -= pad;
-  const band = f.innerW / 12;
-  const barW = Math.min(24, band * 0.6);
-  const xScale = (i) => f.margin.left + band * (i + 0.5);
-  const yScale = (y) => f.margin.top + (1 - (y - yMin) / (yMax - yMin)) * f.innerH;
-  drawAxes(f, xScale, yScale, [...Array(12).keys()], niceTicks(yMin, yMax, 4), (i) => (f.innerW < 360 ? MONTHS[i][0] : MONTHS[i]));
-  climatology.forEach((v, i) => {
-    if (!Number.isFinite(v)) return;
-    const y0 = yScale(0), y1 = yScale(v);
-    const top = Math.min(y0, y1), h = Math.max(1, Math.abs(y1 - y0));
-    const r = Math.min(4, h / 2, barW / 2);
-    const x = xScale(i) - barW / 2;
-    const path = v >= 0
-      ? `M${x},${y0}V${top + r}Q${x},${top} ${x + r},${top}H${x + barW - r}Q${x + barW},${top} ${x + barW},${top + r}V${y0}Z`
-      : `M${x},${y0}V${top + h - r}Q${x},${top + h} ${x + r},${top + h}H${x + barW - r}Q${x + barW},${top + h} ${x + barW},${top + h - r}V${y0}Z`;
-    el("path", { d: path, class: "season-bar" }, f.svg);
+// Twelve bars, one per calendar month. usual[0] is January.
+export function monthBars(container, { usual, units, decimals = 2, height = 180 }) {
+  const chart = newChart(container, height);
+  const values = usual.filter(Number.isFinite);
+  let minY = Math.min(0, ...values);
+  let maxY = Math.max(0, ...values);
+  const padding = (maxY - minY) * 0.08 || 1;
+  if (maxY > 0) maxY += padding;
+  if (minY < 0) minY -= padding;
+
+  const slot = (chart.right - chart.left) / 12;
+  const barWidth = Math.min(24, slot * 0.6);
+  const xOf = (month) => chart.left + slot * (month + 0.5);
+  const yOf = (y) => chart.top + (1 - (y - minY) / (maxY - minY)) * (chart.bottom - chart.top);
+  const narrow = chart.right - chart.left < 360;
+  drawAxes(chart, xOf, yOf, [...Array(12).keys()], tickValues(minY, maxY, 4), (m) => (narrow ? MONTH_NAMES[m][0] : MONTH_NAMES[m]));
+
+  usual.forEach((value, month) => {
+    if (!Number.isFinite(value)) return;
+    const base = yOf(0);
+    const end = yOf(value);
+    const height = Math.max(1, Math.abs(end - base));
+    const radius = Math.min(4, height / 2, barWidth / 2);
+    const x = xOf(month) - barWidth / 2;
+    // Rounded at the value end, square at the zero line.
+    const path = value >= 0
+      ? `M${x},${base}V${end + radius}Q${x},${end} ${x + radius},${end}H${x + barWidth - radius}Q${x + barWidth},${end} ${x + barWidth},${end + radius}V${base}Z`
+      : `M${x},${base}V${end - radius}Q${x},${end} ${x + radius},${end}H${x + barWidth - radius}Q${x + barWidth},${end} ${x + barWidth},${end - radius}V${base}Z`;
+    svgElement("path", { d: path, class: "season-bar" }, chart.svg);
   });
-  const points = climatology.map((v, i) => ({ x: i, y: v, label: MONTHS[i] }));
-  addTooltip(container, f, points, xScale, yScale, (p) =>
-    `<strong>${p.label}</strong><br>average ${p.y.toFixed(decimals)} ${units}`);
+
+  const points = usual.map((value, month) => ({ x: month, y: value, label: MONTH_NAMES[month] }));
+  addHover(container, chart, points, xOf, yOf, (p) => `<strong>${p.label}</strong><br>usually ${p.y.toFixed(decimals)} ${units}`);
 }

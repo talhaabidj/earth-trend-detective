@@ -1,276 +1,298 @@
-// SI-assisted: written with Claude Code (Anthropic) under the team's direction; see docs/AI_USE.md.
-// Browser copy of engine/trend/stats.py. Same methods, same numbers (checked by
-// engine/tests/test_js_parity.py). Times are [year, month] pairs; missing values are null.
+// Trend tests for monthly data, the same as engine/trend/stats.py (the tests check they agree).
+// A series is a list of {year, month, value} rows. A missing value is null.
 
-const Z_95 = 1.959963984540054;
-export const MIN_YEARS_FOR_TEST = 10;
-export const MIN_COVERAGE = 0.7;
+const Z_FOR_95_PERCENT = 1.959963984540054;
+const MIN_YEARS = 10;
+const MIN_SHARE_VALID = 0.7;
+const MAX_MORE_YEARS_FOR_NOT_YET = 50;
 
-const isMissing = (v) => v === null || v === undefined || Number.isNaN(v);
+const isMissing = (value) => value === null || value === undefined || Number.isNaN(value);
+
+// --- Normal and t distributions (JavaScript has no built-in versions) ----------------------
 
 function erf(x) {
-  // Abramowitz and Stegun 7.1.26 is too coarse for p-values; use a series/continued fraction.
-  const t = Math.abs(x);
-  if (t < 3) {
-    let sum = t, term = t;
+  const size = Math.abs(x);
+  if (size < 3) {
+    // Taylor series: accurate to about 1e-15 for small x.
+    let sum = size;
+    let term = size;
     for (let n = 1; n < 200; n++) {
-      term *= -t * t / n;
-      const add = term / (2 * n + 1);
-      sum += add;
-      if (Math.abs(add) < 1e-17) break;
+      term *= -size * size / n;
+      const next = term / (2 * n + 1);
+      sum += next;
+      if (Math.abs(next) < 1e-17) break;
     }
     return Math.sign(x) * (2 / Math.sqrt(Math.PI)) * sum;
   }
-  return Math.sign(x) * (1 - erfcLarge(t));
+  // Continued fraction for large x.
+  let fraction = 0;
+  for (let k = 60; k >= 1; k--) fraction = (k / 2) / (size + fraction);
+  const tail = Math.exp(-size * size) / Math.sqrt(Math.PI) / (size + fraction);
+  return Math.sign(x) * (1 - tail);
 }
 
-function erfcLarge(x) {
-  // Continued fraction for erfc, accurate for x >= 3.
-  let f = 0;
-  for (let k = 60; k >= 1; k--) f = (k / 2) / (x + f);
-  return Math.exp(-x * x) / Math.sqrt(Math.PI) / (x + f);
-}
-
-export function normalTwoSidedP(z) {
+export function twoSidedPFromZ(z) {
   return 2 * (1 - 0.5 * (1 + erf(Math.abs(z) / Math.SQRT2)));
 }
 
-export function mannKendallSAndVar(values) {
-  const x = values.filter((v) => !isMissing(v));
-  const n = x.length;
-  if (n < 2) return { s: 0, varS: 0, n };
-  let s = 0;
-  for (let i = 0; i < n - 1; i++) {
-    for (let j = i + 1; j < n; j++) s += Math.sign(x[j] - x[i]);
+function logGamma(x) {
+  const c = [76.18009172947146, -86.50532032941677, 24.01409824083091,
+    -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let y = x;
+  let tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let series = 1.000000000190015;
+  for (const ci of c) series += ci / ++y;
+  return -tmp + Math.log(2.5066282746310005 * series / x);
+}
+
+// Regularised incomplete beta function (Numerical Recipes, continued fraction).
+function incompleteBeta(x, a, b) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const front = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+  if (x < (a + 1) / (a + b + 2)) return front * betaFraction(a, b, x) / a;
+  return 1 - front * betaFraction(b, a, 1 - x) / b;
+}
+
+function betaFraction(a, b, x) {
+  const tiny = 1e-300;
+  const safe = (v) => (Math.abs(v) < tiny ? tiny : v);
+  let c = 1;
+  let d = 1 / safe(1 - (a + b) * x / (a + 1));
+  let result = d;
+  for (let m = 1; m <= 300; m++) {
+    const even = m * (b - m) * x / ((a + 2 * m - 1) * (a + 2 * m));
+    d = 1 / safe(1 + even * d);
+    c = safe(1 + even / c);
+    result *= d * c;
+    const odd = -(a + m) * (a + b + m) * x / ((a + 2 * m) * (a + 2 * m + 1));
+    d = 1 / safe(1 + odd * d);
+    c = safe(1 + odd / c);
+    result *= d * c;
+    if (Math.abs(d * c - 1) < 1e-15) break;
   }
-  const counts = new Map();
-  for (const v of x) counts.set(v, (counts.get(v) || 0) + 1);
-  let tieTerm = 0;
-  for (const t of counts.values()) tieTerm += t * (t - 1) * (2 * t + 5);
-  return { s, varS: (n * (n - 1) * (2 * n + 5) - tieTerm) / 18, n };
+  return result;
 }
 
-export function zFromS(s, varS) {
-  if (varS <= 0) return 0;
-  if (s > 0) return (s - 1) / Math.sqrt(varS);
-  if (s < 0) return (s + 1) / Math.sqrt(varS);
-  return 0;
+export function tTwoSidedP(t, degrees) {
+  return incompleteBeta(degrees / (degrees + t * t), degrees / 2, 0.5);
 }
 
-function splitByMonth(times, values) {
-  const groups = Array.from({ length: 12 }, () => []);
-  times.forEach(([year, month], i) => {
-    if (!isMissing(values[i])) groups[month - 1].push([year, values[i]]);
-  });
-  groups.forEach((g) => g.sort((a, b) => a[0] - b[0]));
-  return groups;
-}
-
-export function seasonalMannKendall(times, values) {
-  let s = 0, varS = 0;
-  for (const group of splitByMonth(times, values)) {
-    const r = mannKendallSAndVar(group.map((p) => p[1]));
-    s += r.s;
-    varS += r.varS;
+function t95(degrees) {
+  // Find t where the two-sided p is 0.05, by halving the search range.
+  let low = 0;
+  let high = 100;
+  for (let i = 0; i < 200; i++) {
+    const middle = (low + high) / 2;
+    if (tTwoSidedP(middle, degrees) > 0.05) low = middle;
+    else high = middle;
   }
-  const z = zFromS(s, varS);
-  return { s, varS, z, p: normalTwoSidedP(z) };
+  return (low + high) / 2;
 }
 
-const median = (sorted) => {
-  const n = sorted.length;
-  return n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
-};
+// --- Test 1: seasonal Mann-Kendall ---------------------------------------------------------
 
-// Python's round() rounds halves to even; match it so ranks agree.
-function roundHalfEven(x) {
-  const r = Math.round(x);
-  return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+export function mannKendallScore(values) {
+  const valid = values.filter((v) => !isMissing(v));
+  const count = valid.length;
+  let score = 0;
+  for (let i = 0; i < count; i++) {
+    for (let j = i + 1; j < count; j++) score += Math.sign(valid[j] - valid[i]);
+  }
+  const tieSizes = new Map();
+  for (const v of valid) tieSizes.set(v, (tieSizes.get(v) || 0) + 1);
+  let tiePart = 0;
+  for (const t of tieSizes.values()) tiePart += t * (t - 1) * (2 * t + 5);
+  const variance = (count * (count - 1) * (2 * count + 5) - tiePart) / 18;
+  return { score, variance };
 }
 
-export function seasonalSenSlope(times, values, varS) {
+function zScore(score, variance) {
+  if (variance <= 0 || score === 0) return 0;
+  return score > 0 ? (score - 1) / Math.sqrt(variance) : (score + 1) / Math.sqrt(variance);
+}
+
+// 12 lists of {year, value}, one per calendar month, missing values left out.
+function rowsByMonth(rows) {
+  const months = Array.from({ length: 12 }, () => []);
+  for (const row of rows) {
+    if (!isMissing(row.value)) months[row.month - 1].push({ year: row.year, value: row.value });
+  }
+  for (const list of months) list.sort((a, b) => a.year - b.year);
+  return months;
+}
+
+function seasonalMannKendall(rows) {
+  let score = 0;
+  let variance = 0;
+  for (const list of rowsByMonth(rows)) {
+    const month = mannKendallScore(list.map((r) => r.value));
+    score += month.score;
+    variance += month.variance;
+  }
+  const z = zScore(score, variance);
+  return { score, variance, z, p: twoSidedPFromZ(z) };
+}
+
+// Python's round() rounds halves to the even number; do the same so the ranks agree.
+function roundLikePython(x) {
+  const rounded = Math.round(x);
+  return Math.abs(x % 1) === 0.5 && rounded % 2 !== 0 ? rounded - 1 : rounded;
+}
+
+function median(sorted) {
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function seasonalSenSlope(rows, mkVariance) {
   const slopes = [];
-  for (const group of splitByMonth(times, values)) {
-    for (let i = 0; i < group.length; i++) {
-      for (let j = i + 1; j < group.length; j++) {
-        if (group[j][0] !== group[i][0]) {
-          slopes.push((group[j][1] - group[i][1]) / (group[j][0] - group[i][0]));
-        }
+  for (const list of rowsByMonth(rows)) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        slopes.push((list[j].value - list[i].value) / (list[j].year - list[i].year));
       }
     }
   }
   if (!slopes.length) return { slope: NaN, low: NaN, high: NaN };
   slopes.sort((a, b) => a - b);
   const count = slopes.length;
-  const cAlpha = varS > 0 ? Z_95 * Math.sqrt(varS) : 0;
-  const clamp = (r) => Math.min(Math.max(r, 1), count);
-  const lowerRank = clamp(roundHalfEven((count - cAlpha) / 2));
-  const upperRank = clamp(roundHalfEven((count + cAlpha) / 2) + 1);
-  return { slope: median(slopes), low: slopes[lowerRank - 1], high: slopes[upperRank - 1] };
+  // Gilbert (1987): the 95% range is read from the sorted slopes at these ranks.
+  const spread = mkVariance > 0 ? Z_FOR_95_PERCENT * Math.sqrt(mkVariance) : 0;
+  const keepInRange = (rank) => Math.min(Math.max(rank, 1), count);
+  const lowRank = keepInRange(roundLikePython((count - spread) / 2));
+  const highRank = keepInRange(roundLikePython((count + spread) / 2) + 1);
+  return { slope: median(slopes), low: slopes[lowRank - 1], high: slopes[highRank - 1] };
 }
 
-export function monthlyClimatology(times, values) {
-  return splitByMonth(times, values).map((g) =>
-    g.length ? g.reduce((a, p) => a + p[1], 0) / g.length : NaN);
+// --- Seasons and anomalies ------------------------------------------------------------------
+
+// Average value for each calendar month. Index 0 is January.
+export function usualMonthValues(rows) {
+  return rowsByMonth(rows).map((list) =>
+    (list.length ? list.reduce((sum, r) => sum + r.value, 0) / list.length : NaN));
 }
 
-export function anomalies(times, values, climatology) {
-  return times.map(([, month], i) => (isMissing(values[i]) ? NaN : values[i] - climatology[month - 1]));
+function anomalies(rows, usual) {
+  return rows.map((row) => (isMissing(row.value) ? NaN : row.value - usual[row.month - 1]));
 }
 
-export function lag1Autocorrelation(residuals) {
-  const valid = residuals.filter((v) => !Number.isNaN(v));
-  if (valid.length < 4) return 0;
+// --- Test 2: straight line with an autocorrelation correction --------------------------------
+
+function lag1Autocorrelation(values) {
+  const valid = values.filter((v) => !Number.isNaN(v));
+  const pairs = [];
+  for (let i = 0; i < values.length - 1; i++) {
+    if (!Number.isNaN(values[i]) && !Number.isNaN(values[i + 1])) pairs.push([values[i], values[i + 1]]);
+  }
+  if (pairs.length < 3) return 0;
   const mean = valid.reduce((a, b) => a + b, 0) / valid.length;
-  let num = 0, den = 0, pairs = 0;
-  for (const v of valid) den += (v - mean) ** 2;
-  for (let i = 0; i < residuals.length - 1; i++) {
-    const a = residuals[i], b = residuals[i + 1];
-    if (!Number.isNaN(a) && !Number.isNaN(b)) { num += (a - mean) * (b - mean); pairs++; }
+  const spread = valid.reduce((sum, v) => sum + (v - mean) ** 2, 0);
+  if (spread === 0) return 0;
+  return pairs.reduce((sum, [a, b]) => sum + (a - mean) * (b - mean), 0) / spread;
+}
+
+function lineTest(times, anomalyValues) {
+  const points = [];
+  times.forEach((t, i) => { if (!Number.isNaN(anomalyValues[i])) points.push([t, anomalyValues[i]]); });
+  const count = points.length;
+  const meanT = points.reduce((sum, [t]) => sum + t, 0) / count;
+  const meanV = points.reduce((sum, [, v]) => sum + v, 0) / count;
+  const spreadT = points.reduce((sum, [t]) => sum + (t - meanT) ** 2, 0);
+  const slope = points.reduce((sum, [t, v]) => sum + (t - meanT) * (v - meanV), 0) / spreadT;
+  const intercept = meanV - slope * meanT;
+
+  const leftovers = times.map((t, i) => (Number.isNaN(anomalyValues[i]) ? NaN : anomalyValues[i] - (intercept + slope * t)));
+  const r = lag1Autocorrelation(leftovers);
+  const rUsed = Math.min(Math.max(r, 0), 0.99);
+  const effectiveMonths = count * (1 - rUsed) / (1 + rUsed);
+  const squares = points.reduce((sum, [t, v]) => sum + (v - (intercept + slope * t)) ** 2, 0);
+  const noiseSd = Math.sqrt(squares / (count - 2));
+
+  let p = NaN;
+  let low = NaN;
+  let high = NaN;
+  if (effectiveMonths > 3) {
+    const degrees = effectiveMonths - 2;
+    const standardError = noiseSd / Math.sqrt(spreadT) * Math.sqrt((count - 2) / degrees);
+    p = tTwoSidedP(slope / standardError, degrees);
+    const t = t95(degrees);
+    low = slope - t * standardError;
+    high = slope + t * standardError;
   }
-  if (pairs < 3 || den === 0) return 0;
-  return num / den;
+  return { slope, intercept, low, high, p, autocorrelation: r, effectiveMonths, noiseSd };
 }
 
-// Student t distribution via the regularised incomplete beta function.
-function logGamma(x) {
-  const c = [76.18009172947146, -86.50532032941677, 24.01409824083091,
-    -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
-  let y = x, tmp = x + 5.5;
-  tmp -= (x + 0.5) * Math.log(tmp);
-  let ser = 1.000000000190015;
-  for (const ci of c) ser += ci / ++y;
-  return -tmp + Math.log(2.5066282746310005 * ser / x);
+// --- How many more years? -------------------------------------------------------------------
+
+// Weatherhead et al. (1998): years of monthly data for a 90% chance of a significant result.
+export function yearsNeeded(noiseSd, slopePerYear, autocorrelation) {
+  if (!slopePerYear || Number.isNaN(slopePerYear)) return Infinity;
+  const r = Math.min(Math.max(autocorrelation, 0), 0.99);
+  return ((3.3 * noiseSd / Math.abs(slopePerYear)) * Math.sqrt((1 + r) / (1 - r))) ** (2 / 3);
 }
 
-function betaContinuedFraction(a, b, x) {
-  const tiny = 1e-300;
-  let c = 1, d = 1 - (a + b) * x / (a + 1);
-  if (Math.abs(d) < tiny) d = tiny;
-  d = 1 / d;
-  let h = d;
-  for (let m = 1; m <= 300; m++) {
-    const m2 = 2 * m;
-    let aa = m * (b - m) * x / ((a + m2 - 1) * (a + m2));
-    d = 1 + aa * d; if (Math.abs(d) < tiny) d = tiny;
-    c = 1 + aa / c; if (Math.abs(c) < tiny) c = tiny;
-    d = 1 / d; h *= d * c;
-    aa = -(a + m) * (a + b + m) * x / ((a + m2) * (a + m2 + 1));
-    d = 1 + aa * d; if (Math.abs(d) < tiny) d = tiny;
-    c = 1 + aa / c; if (Math.abs(c) < tiny) c = tiny;
-    d = 1 / d;
-    const del = d * c;
-    h *= del;
-    if (Math.abs(del - 1) < 1e-15) break;
-  }
-  return h;
-}
-
-function regularizedBeta(x, a, b) {
-  if (x <= 0) return 0;
-  if (x >= 1) return 1;
-  const front = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x));
-  if (x < (a + 1) / (a + b + 2)) return front * betaContinuedFraction(a, b, x) / a;
-  return 1 - front * betaContinuedFraction(b, a, 1 - x) / b;
-}
-
-export function tTwoSidedP(t, df) {
-  return regularizedBeta(df / (df + t * t), df / 2, 0.5);
-}
-
-export function tQuantile975(df) {
-  let low = 0, high = 100;
-  for (let i = 0; i < 200; i++) {
-    const mid = (low + high) / 2;
-    if (tTwoSidedP(mid, df) > 0.05) low = mid; else high = mid;
-  }
-  return (low + high) / 2;
-}
-
-export function olsWithAutocorrelation(decimalYears, anomalyValues) {
-  const t = [], y = [];
-  decimalYears.forEach((ti, i) => {
-    if (!Number.isNaN(anomalyValues[i])) { t.push(ti); y.push(anomalyValues[i]); }
-  });
-  const n = y.length;
-  const tMean = t.reduce((a, b) => a + b, 0) / n;
-  const yMean = y.reduce((a, b) => a + b, 0) / n;
-  let sxx = 0, sxy = 0;
-  for (let i = 0; i < n; i++) { sxx += (t[i] - tMean) ** 2; sxy += (t[i] - tMean) * (y[i] - yMean); }
-  const slope = sxy / sxx;
-  const intercept = yMean - slope * tMean;
-  const residualsFull = decimalYears.map((ti, i) =>
-    Number.isNaN(anomalyValues[i]) ? NaN : anomalyValues[i] - (intercept + slope * ti));
-  const r1 = lag1Autocorrelation(residualsFull);
-  const r1Used = Math.min(Math.max(r1, 0), 0.99);
-  const nEff = n * (1 - r1Used) / (1 + r1Used);
-  let sse = 0;
-  for (let i = 0; i < n; i++) sse += (y[i] - (intercept + slope * t[i])) ** 2;
-  const residualSd = Math.sqrt(sse / (n - 2));
-  let p = NaN, low = NaN, high = NaN;
-  if (nEff > 3) {
-    const se = residualSd / Math.sqrt(sxx) * Math.sqrt((n - 2) / (nEff - 2));
-    p = tTwoSidedP(slope / se, nEff - 2);
-    const tCrit = tQuantile975(nEff - 2);
-    low = slope - tCrit * se;
-    high = slope + tCrit * se;
-  }
-  return { slope, intercept, low, high, p, r1, n, nEff, residualSd };
-}
-
-// Weatherhead et al. (1998): years of monthly data for a 90% chance of detecting the trend at
-// the 5% level.
-export function yearsToDetect(noiseSd, trendPerYear, phi) {
-  if (!trendPerYear || Number.isNaN(trendPerYear)) return Infinity;
-  const p = Math.min(Math.max(phi, 0), 0.99);
-  return ((3.3 * noiseSd / Math.abs(trendPerYear)) * Math.sqrt((1 + p) / (1 - p))) ** (2 / 3);
-}
-
-export function decideVerdict(mkP, olsP, recordYears, coverage, extraYearsNeeded) {
-  if (recordYears < MIN_YEARS_FOR_TEST || coverage < MIN_COVERAGE) return "too_short";
-  const mkSig = mkP < 0.05;
-  const olsSig = !Number.isNaN(olsP) && olsP < 0.05;
-  if (mkSig && olsSig) return "clear";
-  if (mkSig || olsSig) return "mixed";
-  if (extraYearsNeeded <= 50) return "not_yet";
+function pickVerdict(mkP, lineP, yearsOfData, shareValid, moreYears) {
+  if (yearsOfData < MIN_YEARS || shareValid < MIN_SHARE_VALID) return "too_short";
+  const mkSaysYes = mkP < 0.05;
+  const lineSaysYes = !Number.isNaN(lineP) && lineP < 0.05;
+  if (mkSaysYes && lineSaysYes) return "clear";
+  if (mkSaysYes || lineSaysYes) return "mixed";
+  if (moreYears <= MAX_MORE_YEARS_FOR_NOT_YET) return "not_yet";
   return "none";
 }
 
-export function analyse(times, values) {
-  const clean = values.map((v) => (isMissing(v) ? NaN : v));
-  const nMonths = clean.length;
-  const nValid = clean.filter((v) => !Number.isNaN(v)).length;
-  const recordYears = nMonths / 12;
-  const coverage = nMonths ? nValid / nMonths : 0;
-  const mk = seasonalMannKendall(times, clean);
-  const sen = seasonalSenSlope(times, clean, mk.varS);
-  const climatology = monthlyClimatology(times, clean);
-  const anomalyValues = anomalies(times, clean, climatology);
-  const decimalYears = times.map(([y, m]) => y + (m - 0.5) / 12);
-  const ols = olsWithAutocorrelation(decimalYears, anomalyValues);
-  // Least-squares slope: see the note in engine/trend/stats.py.
-  const yearsNeeded = yearsToDetect(ols.residualSd, ols.slope, ols.r1);
-  const extra = Math.max(0, yearsNeeded - recordYears);
-  const flags = [];
-  if (recordYears < MIN_YEARS_FOR_TEST) flags.push("short_record");
-  if (coverage < MIN_COVERAGE) flags.push("low_coverage");
-  if (ols.r1 > 0.5) flags.push("strong_autocorrelation");
-  if (sen.slope === 0 && ols.slope !== 0) flags.push("median_slope_zero");
-  return {
-    result: {
-      n_months: nMonths, n_valid: nValid,
-      first_year: times[0][0], last_year: times[times.length - 1][0],
-      record_years: recordYears, coverage,
-      mk_s: mk.s, mk_z: mk.z, mk_p: mk.p,
-      sen_slope_per_year: sen.slope, sen_low_per_year: sen.low, sen_high_per_year: sen.high,
-      ols_slope_per_year: ols.slope, ols_low_per_year: ols.low, ols_high_per_year: ols.high,
-      ols_p: ols.p, lag1_autocorrelation: ols.r1, effective_n: ols.nEff, noise_sd: ols.residualSd,
-      years_needed: yearsNeeded, extra_years_needed: extra,
-      verdict: decideVerdict(mk.p, ols.p, recordYears, coverage, extra),
-      flags,
-    },
-    climatology,
-    anomalies: anomalyValues,
-    olsIntercept: ols.intercept,
+// --- Putting it together --------------------------------------------------------------------
+
+export function analyse(rows) {
+  rows = rows.map((r) => ({ ...r, value: isMissing(r.value) ? NaN : r.value }));
+  const months = rows.length;
+  const validMonths = rows.filter((r) => !Number.isNaN(r.value)).length;
+  const yearsOfData = months / 12;
+  const shareValid = months ? validMonths / months : 0;
+
+  const mk = seasonalMannKendall(rows);
+  const sen = seasonalSenSlope(rows, mk.variance);
+  const usual = usualMonthValues(rows);
+  const anomalyValues = anomalies(rows, usual);
+  const times = rows.map((r) => r.year + (r.month - 0.5) / 12);
+  const line = lineTest(times, anomalyValues);
+
+  // Straight-line slope here: see the note in engine/trend/stats.py.
+  const needed = yearsNeeded(line.noiseSd, line.slope, line.autocorrelation);
+  const moreYears = Math.max(0, needed - yearsOfData);
+
+  const warnings = [];
+  if (yearsOfData < MIN_YEARS) warnings.push("short_record");
+  if (shareValid < MIN_SHARE_VALID) warnings.push("many_missing");
+  if (line.autocorrelation > 0.5) warnings.push("strong_memory");
+  if (sen.slope === 0 && line.slope !== 0) warnings.push("median_slope_zero");
+
+  const result = {
+    months,
+    valid_months: validMonths,
+    first_year: rows[0].year,
+    last_year: rows[months - 1].year,
+    years_of_data: yearsOfData,
+    share_valid: shareValid,
+    mk_score: mk.score,
+    mk_z: mk.z,
+    mk_p: mk.p,
+    sen_slope: sen.slope,
+    sen_low: sen.low,
+    sen_high: sen.high,
+    line_slope: line.slope,
+    line_low: line.low,
+    line_high: line.high,
+    line_p: line.p,
+    autocorrelation: line.autocorrelation,
+    effective_months: line.effectiveMonths,
+    noise_sd: line.noiseSd,
+    years_needed: needed,
+    more_years_needed: moreYears,
+    verdict: pickVerdict(mk.p, line.p, yearsOfData, shareValid, moreYears),
+    warnings,
   };
+  return { result, usual, anomalies: anomalyValues };
 }

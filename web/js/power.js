@@ -1,73 +1,88 @@
-// SI-assisted: written with Claude Code (Anthropic) under the team's direction; see docs/AI_USE.md.
-// Fetch NASA POWER monthly data in the browser (POWER allows cross-origin requests).
-// Mirrors engine/trend/power.py: drops the 13th "annual" month and the -999 fill value.
+// Download monthly data from NASA POWER in the browser. POWER allows this from any website.
+// Same cleaning as engine/trend/power.py: drop the 13th "yearly" month, turn -999 into null.
 
-const POWER_BASE = "https://power.larc.nasa.gov/api/temporal/monthly";
-export const LAST_FULL_YEAR = 2025;
-const FILL = -999;
+const POWER_URL = "https://power.larc.nasa.gov/api/temporal/monthly";
+const MISSING = -999;
+export const LAST_YEAR = 2025;
 
-export function pointUrl(variable, lat, lon, startYear, endYear = LAST_FULL_YEAR) {
-  return `${POWER_BASE}/point?parameters=${variable}&community=AG&longitude=${lon.toFixed(3)}` +
-    `&latitude=${lat.toFixed(3)}&start=${startYear}&end=${endYear}&format=JSON`;
+function pointUrl(variable, place, firstYear) {
+  return `${POWER_URL}/point?parameters=${variable}&community=AG` +
+    `&longitude=${place.lon.toFixed(3)}&latitude=${place.lat.toFixed(3)}` +
+    `&start=${firstYear}&end=${LAST_YEAR}&format=JSON`;
 }
 
-export function regionUrl(variable, box, startYear, endYear = LAST_FULL_YEAR) {
-  return `${POWER_BASE}/regional?parameters=${variable}&community=AG` +
+function areaUrl(variable, box, firstYear) {
+  return `${POWER_URL}/regional?parameters=${variable}&community=AG` +
     `&latitude-min=${box.south.toFixed(2)}&latitude-max=${box.north.toFixed(2)}` +
     `&longitude-min=${box.west.toFixed(2)}&longitude-max=${box.east.toFixed(2)}` +
-    `&start=${startYear}&end=${endYear}&format=JSON`;
+    `&start=${firstYear}&end=${LAST_YEAR}&format=JSON`;
 }
 
-export function parseMonthly(valuesByKey) {
-  return Object.entries(valuesByKey)
-    .map(([key, value]) => ({ year: +key.slice(0, 4), month: +key.slice(4), value }))
-    .filter((d) => d.month >= 1 && d.month <= 12)
-    .map((d) => ({ ...d, value: d.value === null || d.value <= FILL + 0.5 ? null : d.value }))
-    .sort((a, b) => a.year - b.year || a.month - b.month);
+// POWER's {"YYYYMM": value} -> sorted [{year, month, value}].
+function toRows(valuesByMonth) {
+  const rows = [];
+  for (const [key, value] of Object.entries(valuesByMonth)) {
+    const year = Number(key.slice(0, 4));
+    const month = Number(key.slice(4));
+    if (month === 13) continue;
+    rows.push({ year, month, value: value === null || value <= MISSING ? null : value });
+  }
+  return rows.sort((a, b) => a.year - b.year || a.month - b.month);
 }
 
-function areaWeightedMean(features, variable) {
-  const sums = new Map(), weights = new Map(), keys = new Set();
-  for (const f of features) {
-    const w = Math.cos(f.geometry.coordinates[1] * Math.PI / 180);
-    for (const d of parseMonthly(f.properties.parameter[variable])) {
-      const key = d.year * 100 + d.month;
-      keys.add(key);
-      if (d.value === null) continue;
-      sums.set(key, (sums.get(key) || 0) + w * d.value);
-      weights.set(key, (weights.get(key) || 0) + w);
+// Average the grid cells of an area. Cells near the poles are smaller, so each counts by cos(latitude).
+function areaAverage(cells, variable) {
+  const totals = new Map();
+  for (const cell of cells) {
+    const weight = Math.cos(cell.geometry.coordinates[1] * Math.PI / 180);
+    for (const row of toRows(cell.properties.parameter[variable])) {
+      const key = row.year * 100 + row.month;
+      const entry = totals.get(key) || { year: row.year, month: row.month, total: 0, weights: 0 };
+      if (row.value !== null) {
+        entry.total += weight * row.value;
+        entry.weights += weight;
+      }
+      totals.set(key, entry);
     }
   }
-  return [...keys].sort((a, b) => a - b).map((key) => ({
-    year: Math.floor(key / 100), month: key % 100,
-    value: weights.has(key) ? sums.get(key) / weights.get(key) : null,
-  }));
+  return [...totals.keys()].sort((a, b) => a - b).map((key) => {
+    const e = totals.get(key);
+    return { year: e.year, month: e.month, value: e.weights ? e.total / e.weights : null };
+  });
 }
 
-async function getJson(url) {
+async function downloadJson(url) {
   const response = await fetch(url);
   if (!response.ok) {
-    let detail = "";
-    try { detail = (await response.json()).messages?.join(" ") || ""; } catch { /* not JSON */ }
-    throw new Error(`NASA POWER answered ${response.status}. ${detail}`.trim());
+    let reason = "";
+    try {
+      reason = (await response.json()).messages?.join(" ") || "";
+    } catch {
+      // The error page was not JSON; the status code is enough.
+    }
+    throw new Error(`NASA POWER answered ${response.status}. ${reason}`.trim());
   }
   return response.json();
 }
 
-// place: {lat, lon} for a grid cell, or {box: {south, north, west, east}} for an area (>= 2° each side).
-export async function fetchSeries(variable, place, startYear) {
+// place is {lat, lon} for one grid cell, or {box: {south, north, west, east}} for an area.
+export async function getMonthlyData(variable, place, firstYear) {
   if (place.box) {
-    const url = regionUrl(variable, place.box, startYear);
-    const data = await getJson(url);
-    return { series: areaWeightedMean(data.features, variable), url, cells: data.features.length };
+    const url = areaUrl(variable, place.box, firstYear);
+    const data = await downloadJson(url);
+    return { rows: areaAverage(data.features, variable), url, cells: data.features.length };
   }
-  const url = pointUrl(variable, place.lat, place.lon, startYear);
-  const data = await getJson(url);
-  return { series: parseMonthly(data.properties.parameter[variable]), url, cells: 1 };
+  const url = pointUrl(variable, place, firstYear);
+  const data = await downloadJson(url);
+  return { rows: toRows(data.properties.parameter[variable]), url, cells: 1 };
 }
 
-export function boxAround(lat, lon, halfSize = 1) {
-  const south = Math.max(-89, lat - halfSize), north = Math.min(89, lat + halfSize);
-  const west = Math.max(-179.9, lon - halfSize), east = Math.min(179.9, lon + halfSize);
-  return { south, north, west, east };
+// A 2° x 2° box around a point (POWER needs at least 2° each way for an area).
+export function boxAround(lat, lon) {
+  return {
+    south: Math.max(-89, lat - 1),
+    north: Math.min(89, lat + 1),
+    west: Math.max(-179.9, lon - 1),
+    east: Math.min(179.9, lon + 1),
+  };
 }

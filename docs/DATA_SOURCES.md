@@ -1,7 +1,5 @@
 # Data, code and other resources
 
-SI-assisted: drafted with Claude Code (Anthropic) and reviewed by the team; see [AI_USE.md](AI_USE.md).
-
 The Space Apps terms ask us to cite every resource, open source or not. This is the full list.
 
 ## NASA data

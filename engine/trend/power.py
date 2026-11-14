@@ -1,80 +1,74 @@
-# SI-assisted: written with Claude Code (Anthropic) under the team's direction; see docs/AI_USE.md.
-"""NASA POWER monthly data (MERRA-2 and CERES based), no login needed.
+"""Download monthly data from NASA POWER (no login needed).
 
-POWER returns a 13th "month" per year that is the annual value, and uses -999 for missing data.
-Both are removed here. Docs: https://power.larc.nasa.gov/docs/services/api/
+POWER sends a 13th "month" each year with the yearly value, and -999 for missing data.
+We drop the first and turn the second into None. Docs: https://power.larc.nasa.gov/docs/services/api/
 """
 
 import math
 
 import requests
 
-POWER_BASE = "https://power.larc.nasa.gov/api/temporal/monthly"
-FILL_VALUE = -999.0
+POWER_URL = "https://power.larc.nasa.gov/api/temporal/monthly"
+MISSING = -999
 TIMEOUT_SECONDS = 60
 
 
-def point_url(parameter, latitude, longitude, start_year, end_year):
-    return (
-        f"{POWER_BASE}/point?parameters={parameter}&community=AG"
-        f"&longitude={longitude}&latitude={latitude}&start={start_year}&end={end_year}&format=JSON"
-    )
+def point_url(variable, lat, lon, first_year, last_year):
+    return (f"{POWER_URL}/point?parameters={variable}&community=AG"
+            f"&longitude={lon}&latitude={lat}&start={first_year}&end={last_year}&format=JSON")
 
 
-def region_url(parameter, south, north, west, east, start_year, end_year):
-    return (
-        f"{POWER_BASE}/regional?parameters={parameter}&community=AG"
-        f"&latitude-min={south}&latitude-max={north}&longitude-min={west}&longitude-max={east}"
-        f"&start={start_year}&end={end_year}&format=JSON"
-    )
+def area_url(variable, south, north, west, east, first_year, last_year):
+    return (f"{POWER_URL}/regional?parameters={variable}&community=AG"
+            f"&latitude-min={south}&latitude-max={north}&longitude-min={west}&longitude-max={east}"
+            f"&start={first_year}&end={last_year}&format=JSON")
 
 
-def parse_monthly(values_by_key):
-    """{'YYYYMM': value} -> sorted list of ((year, month), value or None), dropping month 13."""
-    series = []
-    for key, value in values_by_key.items():
+def to_rows(values_by_month):
+    """Turn POWER's {"YYYYMM": value} into sorted (year, month, value) rows."""
+    rows = []
+    for key, value in values_by_month.items():
         year, month = int(key[:4]), int(key[4:])
         if month == 13:
             continue
-        clean = None if value is None or value <= FILL_VALUE + 0.5 else float(value)
-        series.append(((year, month), clean))
-    series.sort()
-    return series
+        if value is None or value <= MISSING:
+            value = None
+        rows.append((year, month, value))
+    return sorted(rows)
 
 
-def area_weighted_mean(features, parameter):
-    """Average grid cells of a regional response, weighted by cos(latitude)."""
-    sums, weights = {}, {}
-    for feature in features:
-        latitude = feature["geometry"]["coordinates"][1]
-        weight = math.cos(math.radians(latitude))
-        for time, value in parse_monthly(feature["properties"]["parameter"][parameter]):
-            if value is None:
-                continue
-            sums[time] = sums.get(time, 0.0) + weight * value
-            weights[time] = weights.get(time, 0.0) + weight
-    all_times = sorted({t for f in features for t, _ in parse_monthly(f["properties"]["parameter"][parameter])})
-    return [(t, sums[t] / weights[t] if t in weights else None) for t in all_times]
+def area_average(cells, variable):
+    """Average the grid cells of an area. Cells near the poles are smaller, so each one counts
+    by the cosine of its latitude."""
+    totals = {}
+    for cell in cells:
+        weight = math.cos(math.radians(cell["geometry"]["coordinates"][1]))
+        for year, month, value in to_rows(cell["properties"]["parameter"][variable]):
+            total, weights = totals.get((year, month), (0.0, 0.0))
+            if value is not None:
+                total, weights = total + weight * value, weights + weight
+            totals[(year, month)] = (total, weights)
+    return [(year, month, total / weights if weights else None)
+            for (year, month), (total, weights) in sorted(totals.items())]
 
 
-def fetch_point(parameter, latitude, longitude, start_year, end_year):
-    url = point_url(parameter, latitude, longitude, start_year, end_year)
+def download(url):
     response = requests.get(url, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
-    data = response.json()
-    series = parse_monthly(data["properties"]["parameter"][parameter])
-    meta = data["parameters"][parameter]
-    return series, {"url": url, "units": meta["units"], "longname": meta["longname"],
-                    "sources": data.get("header", {}).get("sources", [])}
+    return response.json()
 
 
-def fetch_region(parameter, south, north, west, east, start_year, end_year):
-    url = region_url(parameter, south, north, west, east, start_year, end_year)
-    response = requests.get(url, timeout=TIMEOUT_SECONDS)
-    response.raise_for_status()
-    data = response.json()
-    series = area_weighted_mean(data["features"], parameter)
-    meta = data["parameters"][parameter]
-    return series, {"url": url, "units": meta["units"], "longname": meta["longname"],
-                    "grid_cells": len(data["features"]),
-                    "sources": data.get("header", {}).get("sources", [])}
+def get_point(variable, lat, lon, first_year, last_year):
+    url = point_url(variable, lat, lon, first_year, last_year)
+    data = download(url)
+    rows = to_rows(data["properties"]["parameter"][variable])
+    return rows, {"url": url, "units": data["parameters"][variable]["units"],
+                  "sources": data["header"].get("sources", [])}
+
+
+def get_area(variable, south, north, west, east, first_year, last_year):
+    url = area_url(variable, south, north, west, east, first_year, last_year)
+    data = download(url)
+    rows = area_average(data["features"], variable)
+    return rows, {"url": url, "units": data["parameters"][variable]["units"],
+                  "cells": len(data["features"]), "sources": data["header"].get("sources", [])}

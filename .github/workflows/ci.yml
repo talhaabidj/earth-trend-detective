@@ -1,4 +1,3 @@
-# SI-assisted: written with Claude Code (Anthropic) under the team's direction; see docs/AI_USE.md.
 name: tests
 on: [push, pull_request]
 jobs:
