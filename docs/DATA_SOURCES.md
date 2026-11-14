@@ -35,6 +35,8 @@ Explorer (partner resource), which we looked at as an existing tool.
 | pytest | tests | MIT |
 | Playwright (Python) | headless browser to take the screenshots for the README and demo video (`tools/demo/`) | Apache-2.0 |
 | ffmpeg | building the demo video | LGPL-2.1+ / GPL |
+| Kokoro-82M v1.0 (hexgrad), via kokoro-onnx | SI text-to-speech for the demo video's English voice-over (voice af_heart) | Apache-2.0 (model), MIT (kokoro-onnx) |
+| soundfile | writing the voice clips | BSD-3-Clause |
 
 The web page has no other dependencies and no build step. Charts are our own SVG code.
 
@@ -46,7 +48,7 @@ OpenStreetMap standard tiles, © OpenStreetMap contributors, data under the Open
 ## Hosting and tools
 
 - GitHub (code hosting, Actions for tests), Vercel Hobby plan (static hosting). Free tiers.
-- Claude Code (Anthropic), an SI coding assistant: see [AI_USE.md](AI_USE.md).
+- Claude Code (Anthropic), an SI coding assistant, and Kokoro text-to-speech for the video voice-over: see [AI_USE.md](AI_USE.md).
 
 ## Text, images and fonts
 
