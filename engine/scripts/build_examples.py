@@ -40,8 +40,8 @@ STORIES = [
             },
             {
                 "text": "The average mixes day and night. Split them: daytime highs on the left, night-time lows on "
-                        "the right. The nights are clearly getting warmer while the days are not. Warm nights matter "
-                        "for health, because bodies cannot cool down.",
+                        "the right. The nights are clearly getting warmer while the days are not. Warm nights make it "
+                        "harder for people to recover from the heat of the day.",
                 "panels": [("Jacobabad", "T2M_MAX", "none"), ("Jacobabad", "T2M_MIN", "clear")],
             },
         ],
