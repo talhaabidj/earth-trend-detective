@@ -102,6 +102,14 @@ export const VARIABLES = [
   },
 ];
 
+// Satellite variables used in the precomputed examples only (the service is too slow for live use).
+VARIABLES.push({
+  id: "NDVI", theme: "green", storyOnly: true, name: "Vegetation greenness (NDVI)", units: "index", decimals: 3,
+  plain: "How green and leafy the land looks from space: near 0 is bare ground, near 0.8 is dense healthy plants.",
+  why: "Shows crops, forests and deserts changing.",
+  source: "MODIS on NASA's Terra satellite (MOD13Q1 v6.1, 250 m), via the ORNL DAAC MODIS Web Service", startYear: 2000,
+});
+
 // Simple place-type helper (rules, not SI): suggests where to start for a kind of place.
 export const PLACE_TYPES = [
   { id: "city", label: "A big city", suggest: ["T2M_MIN", "RH2M", "ALLSKY_SFC_SW_DWN"],

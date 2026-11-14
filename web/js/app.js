@@ -135,7 +135,7 @@ function renderThemes() {
 function renderVariables() {
   const grid = $("variables");
   grid.replaceChildren();
-  for (const v of VARIABLES.filter((x) => x.theme === state.theme || state.suggested.includes(x.id))) {
+  for (const v of VARIABLES.filter((x) => !x.storyOnly && (x.theme === state.theme || state.suggested.includes(x.id)))) {
     const card = document.createElement("button");
     card.type = "button";
     card.className = "variable-card" + (state.suggested.includes(v.id) ? " suggested" : "");

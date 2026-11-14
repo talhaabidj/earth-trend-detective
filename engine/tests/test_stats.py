@@ -113,3 +113,11 @@ def test_rounded_data_flags_zero_median_slope_but_keeps_years_estimate():
     if result.sen_slope_per_year == 0:
         assert "median_slope_zero" in result.flags
     assert math.isfinite(result.years_needed)
+
+
+def test_modis_composites_to_monthly_means():
+    from trend.modis import composite_value, monthly_means
+    assert composite_value([5000, 6000, -3000]) == pytest.approx(0.55)
+    assert composite_value([-3000, -3000, 5000]) is None
+    means = monthly_means([("2001-01-01", 0.2), ("2001-01-17", 0.4), ("2001-02-02", None)])
+    assert means == {(2001, 1): pytest.approx(0.3)}
