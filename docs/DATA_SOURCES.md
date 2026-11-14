@@ -33,6 +33,8 @@ Explorer (partner resource), which we looked at as an existing tool.
 | pymannkendall 1.4.3 | used only in tests, to check our Mann-Kendall code | MIT |
 | requests | downloading data in the engine scripts | Apache-2.0 |
 | pytest | tests | MIT |
+| Playwright (Python) | headless browser to take the screenshots for the README and demo video (`tools/demo/`) | Apache-2.0 |
+| ffmpeg | building the demo video | LGPL-2.1+ / GPL |
 
 The web page has no other dependencies and no build step. Charts are our own SVG code.
 
