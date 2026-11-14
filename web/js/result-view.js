@@ -5,6 +5,11 @@ import { analyse } from "./stats.js";
 import { describe } from "./verdict.js";
 import { lineChart, monthBars } from "./charts.js";
 
+// Text from a link (like a place name) must never be read as HTML.
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
 const monthLabel = (row) => `${row.year}-${String(row.month).padStart(2, "0")}`;
 const yearFraction = (row) => row.year + (row.month - 0.5) / 12;
 
@@ -38,7 +43,7 @@ function resultHtml(variable, label, result, text, cells, sourceUrl, compact) {
     </div>`;
   return `
     <div class="result-head">
-      <h3>${variable.name} · ${label}</h3>
+      <h3>${variable.name} · ${escapeHtml(label)}</h3>
       <span class="muted">${result.first_year}–${result.last_year}, ${result.valid_months} months</span>
     </div>
     <div class="verdict ${text.tone}"><h4>${text.title}</h4><p>${text.body}</p></div>
