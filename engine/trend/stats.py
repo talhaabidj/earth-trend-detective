@@ -235,7 +235,9 @@ def analyse(times, values):
     decimal_years = [year + (month - 0.5) / 12.0 for year, month in times]
     ols = ols_with_autocorrelation(decimal_years, anomaly_values)
 
-    needed = years_to_detect(ols["residual_sd"], sen["slope"], ols["r1"])
+    # Weatherhead et al. is a regression method, and the Sen slope is often exactly 0 for
+    # rounded or zero-heavy data, so the least-squares slope is used here.
+    needed = years_to_detect(ols["residual_sd"], ols["slope"], ols["r1"])
     extra = max(0.0, needed - record_years)
 
     flags = []
@@ -245,6 +247,8 @@ def analyse(times, values):
         flags.append("low_coverage")
     if ols["r1"] > 0.5:
         flags.append("strong_autocorrelation")
+    if sen["slope"] == 0 and ols["slope"] != 0:
+        flags.append("median_slope_zero")
 
     verdict = decide_verdict(mk["p"], ols["p"], record_years, coverage, extra)
     return TrendResult(

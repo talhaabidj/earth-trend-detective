@@ -248,12 +248,14 @@ export function analyse(times, values) {
   const anomalyValues = anomalies(times, clean, climatology);
   const decimalYears = times.map(([y, m]) => y + (m - 0.5) / 12);
   const ols = olsWithAutocorrelation(decimalYears, anomalyValues);
-  const yearsNeeded = yearsToDetect(ols.residualSd, sen.slope, ols.r1);
+  // Least-squares slope: see the note in engine/trend/stats.py.
+  const yearsNeeded = yearsToDetect(ols.residualSd, ols.slope, ols.r1);
   const extra = Math.max(0, yearsNeeded - recordYears);
   const flags = [];
   if (recordYears < MIN_YEARS_FOR_TEST) flags.push("short_record");
   if (coverage < MIN_COVERAGE) flags.push("low_coverage");
   if (ols.r1 > 0.5) flags.push("strong_autocorrelation");
+  if (sen.slope === 0 && ols.slope !== 0) flags.push("median_slope_zero");
   return {
     result: {
       n_months: nMonths, n_valid: nValid,

@@ -104,3 +104,12 @@ def test_area_weighted_mean_uses_cosine_latitude():
     ]
     (_, value), = area_weighted_mean(features, "T2M")
     assert value == pytest.approx((10 * 1 + 20 * 0.5) / 1.5)
+
+
+def test_rounded_data_flags_zero_median_slope_but_keeps_years_estimate():
+    times, values = synthetic_series(trend_per_year=0.004, noise_sd=0.02, seed=5)
+    rounded = [round(v / 10, 1) for v in values]  # coarse rounding creates many ties
+    result, _, _ = stats.analyse(times, rounded)
+    if result.sen_slope_per_year == 0:
+        assert "median_slope_zero" in result.flags
+    assert math.isfinite(result.years_needed)
