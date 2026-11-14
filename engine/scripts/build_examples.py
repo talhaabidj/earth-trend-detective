@@ -48,7 +48,7 @@ STORIES = [
     {
         "id": "lahore-phoenix",
         "title": "Same question, opposite answers",
-        "teaser": "Lahore and Phoenix are both hot, dry-season cities. Their trends go opposite ways.",
+        "teaser": "Two hot cities, one in Pakistan and one in the USA. Their trends go opposite ways.",
         "steps": [
             {
                 "text": "Is the air getting more humid? In Lahore (left) humidity is clearly rising. In Phoenix, USA "
