@@ -1,5 +1,4 @@
-// Turns the test results into plain sentences. These are fixed templates filled with the
-// computed numbers; nothing here is written by SI while the page runs.
+// Turns the test results into plain sentences: fixed templates filled with the computed numbers.
 
 export function signed(value, decimals = 2) {
   if (!Number.isFinite(value)) return "–";
@@ -79,14 +78,17 @@ export function describe(result, variable) {
   };
 
   const yearsNeededText = Number.isFinite(result.years_needed) ? Math.round(result.years_needed) : "more than 1,000";
+  const yearsLine = result.verdict === "clear"
+    ? "Years of data needed: none more, the trend is already significant"
+    : `Years of data needed for a 90% chance of detection: ${yearsNeededText} (based on the straight-line ` +
+      `slope, ${withUnits(signed(10 * result.line_slope, decimals))} per decade)`;
   const numbers = [
     `Seasonal Mann-Kendall test: p = ${pText(result.mk_p)}`,
     `Straight-line test on the anomalies, allowing for month-to-month memory: p = ${pText(result.line_p)} ` +
       `(counts as ${Math.round(result.effective_months)} independent months out of ${result.valid_months})`,
     `Rate from the ${method}: ${rateText} (${rangeText})`,
     `Month-to-month memory (lag-1 autocorrelation): ${result.autocorrelation.toFixed(2)}`,
-    `Years of data needed for a 90% chance of detection: ${yearsNeededText} (based on the straight-line ` +
-      `slope, ${withUnits(signed(10 * result.line_slope, decimals))} per decade)`,
+    yearsLine,
   ];
 
   return {

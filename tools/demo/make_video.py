@@ -1,4 +1,4 @@
-"""Build the demo video: 1920x1080, an English SI voice-over, and burned-in English subtitles that
+"""Build the demo video: 1920x1080, an English voice-over, and burned-in English subtitles that
 match the spoken words. Scenes last as long as their spoken line; the video must stay under 30 s.
 
 Needs: screenshots from take_screenshots.py, the voice clips from make_narration.py, Playwright
@@ -19,9 +19,17 @@ PAUSE = 0.2        # silence after each spoken line
 MIN_SCENE = 2.5    # shortest time a scene stays on screen (without the fade)
 MAX_LENGTH = 29.5  # the rules allow 30 seconds; keep a margin
 
-SCENE_IMAGES = [
-    "card-team", "card-name", "09-explorer-start.png", "03-jacobabad-day-night.png",
-    "05-hunza-not-yet.png", "07-trend-map.png", "06-greener-from-space.png", "card-future",
+# (image, crop) per scene. A crop (x, y, width) in screenshot pixels zooms in on the part that
+# matters, so the text can be read on a small screen; the height follows from 16:9.
+SCENES_IN_ORDER = [
+    ("card-team", None),
+    ("card-name", None),
+    ("09-explorer-start.png", (200, 40, 1500)),
+    ("03-jacobabad-day-night.png", (230, 240, 1460)),
+    ("05-hunza-not-yet.png", (230, 255, 1460)),
+    ("07-trend-map.png", (200, 100, 1520)),
+    ("06-greener-from-space.png", (230, 250, 1460)),
+    ("card-future", None),
 ]
 
 CARD_STYLE = """
@@ -34,7 +42,7 @@ CARD_STYLE = """
   p { font-size: 34px; margin: 0 0 14px; color: #2b2b29; line-height: 1.3; }
   .url { color: #1c5cab; font-weight: 700; }
   .bar { width: 120px; height: 8px; background: #2a78d6; border-radius: 4px; margin-bottom: 34px; }
-  .note { position: absolute; top: 30px; right: 60px; margin: 0; font-size: 18px; color: #52514e; }
+  .note { position: absolute; top: 28px; right: 56px; margin: 0; font-size: 22px; color: #3d3c39; }
 </style>
 """
 
@@ -65,12 +73,12 @@ def draw_cards(folder):
 def plan_scenes(voice_folder):
     """Each scene: image, spoken line, voice clip, when it starts and how long it lasts."""
     clips = json.loads((voice_folder / "lines.json").read_text())["clips"]
-    if len(clips) != len(SCENE_IMAGES):
+    if len(clips) != len(SCENES_IN_ORDER):
         raise SystemExit("make_narration.py and make_video.py must have the same number of scenes")
     scenes, start = [], 0.0
-    for image, clip in zip(SCENE_IMAGES, clips):
+    for (image, crop), clip in zip(SCENES_IN_ORDER, clips):
         visible = max(clip["seconds"] + PAUSE, MIN_SCENE)
-        scenes.append({"image": image, "text": clip["text"], "voice": voice_folder / clip["file"],
+        scenes.append({"image": image, "crop": crop, "text": clip["text"], "voice": voice_folder / clip["file"],
                        "start": start, "seconds": visible + FADE, "speech": clip["seconds"]})
         start += visible
     length = start + FADE
@@ -104,7 +112,11 @@ def build_video(scenes, length, shots, cards, subtitles, output):
         image = scene["image"]
         file = (cards / f"{image}.png") if image.startswith("card-") else (shots / image)
         inputs += ["-loop", "1", "-t", f"{scene['seconds']:.2f}", "-i", str(file)]
-        filters.append(f"[{i}:v]scale=1920:1080,setsar=1,fps=30,format=yuv420p[v{i}]")
+        zoom = ""
+        if scene["crop"]:
+            x, y, width = scene["crop"]
+            zoom = f"crop={width}:{round(width * 9 / 16)}:{x}:{y},"
+        filters.append(f"[{i}:v]{zoom}scale=1920:1080:flags=lanczos,setsar=1,fps=30,format=yuv420p[v{i}]")
     previous = "v0"
     for i in range(1, len(scenes)):
         filters.append(f"[{previous}][v{i}]xfade=transition=fade:duration={FADE}:offset={scenes[i]['start']:.2f}[x{i}]")
@@ -118,17 +130,20 @@ def build_video(scenes, length, shots, cards, subtitles, output):
         delay = int((scene["start"] + 0.1) * 1000)
         filters.append(f"[{first_voice + i}:a]aresample=48000,adelay={delay}|{delay}[a{i}]")
     mixed = "".join(f"[a{i}]" for i in range(len(scenes)))
-    filters.append(f"{mixed}amix=inputs={len(scenes)}:normalize=0,apad,atrim=0:{length:.2f}[audio]")
+    # Loudness about -14 LUFS, the level YouTube plays at.
+    filters.append(f"{mixed}amix=inputs={len(scenes)}:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,"
+                   f"aresample=48000,apad,atrim=0:{length:.2f}[audio]")
 
     command = [
         "ffmpeg", "-y", "-loglevel", "error", *inputs,
         "-filter_complex", ";".join(filters), "-map", "[video]", "-map", "[audio]",
         "-t", f"{length:.2f}", "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "160k", "-ac", "2", "-movflags", "+faststart",
-        "-metadata", "title=Earth Trend Detective - Ludilume Studios - NASA Space Apps 2026",
-        "-metadata", "comment=SI-generated voice-over (Kokoro-82M text-to-speech, voice af_heart). "
-                     "Video assembled with help from Claude Code (SI) from screenshots of the live site. "
-                     "No SI-generated images or music.",
+        # No file metadata at all (no title, no encoder name).
+        "-map_metadata", "-1", "-map_chapters", "-1", "-fflags", "+bitexact",
+        "-flags:v", "+bitexact", "-flags:a", "+bitexact",
+        "-metadata:s:v", "encoder=", "-metadata:s:a", "encoder=",
+        "-bsf:v", "filter_units=remove_types=6",  # drops the encoder's settings note from the stream
         str(output),
     ]
     subprocess.run(command, check=True)

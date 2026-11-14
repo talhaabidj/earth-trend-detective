@@ -1,5 +1,4 @@
-"""Make the English voice-over for the demo video with Kokoro, an open-weight SI text-to-speech model
-(Kokoro-82M v1.0, Apache-2.0), run locally. Writes one WAV per scene and lines.json with the
+"""Make the English voice-over for the demo video, one WAV per scene, plus lines.json with the
 spoken text and the length of each clip. make_video.py then fits the scenes to the voice.
 
 Usage: python tools/demo/make_narration.py MODEL_FOLDER OUTPUT_FOLDER

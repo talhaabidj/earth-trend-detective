@@ -109,7 +109,7 @@ export const VARIABLES = [
   },
 ];
 
-// Where to start for a kind of place. Simple fixed rules, no SI.
+// Where to start for a kind of place. Simple fixed rules.
 export const PLACE_TYPES = [
   { id: "city", label: "A big city", suggest: ["T2M_MIN", "RH2M", "ALLSKY_SFC_SW_DWN"],
     reason: "Cities trap heat at night, and haze can cut sunlight." },

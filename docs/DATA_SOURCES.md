@@ -48,7 +48,7 @@ OpenStreetMap standard tiles, © OpenStreetMap contributors, data under the Open
 ## Hosting and tools
 
 - GitHub (code hosting, Actions for tests), Vercel Hobby plan (static hosting). Free tiers.
-- Claude Code (Anthropic), an SI coding assistant, and Kokoro text-to-speech for the video voice-over: see [AI_USE.md](AI_USE.md).
+- SI tools: listed in [AI_USE.md](AI_USE.md).
 
 ## Text, images and fonts
 

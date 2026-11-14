@@ -79,14 +79,12 @@ The data was obtained from National Aeronautics and Space Administration (NASA) 
 Center's Prediction Of Worldwide Energy Resources (POWER) project funded through the NASA Earth
 Science Division. All sources and licences: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
-## Use of SI (AI)
+## Use of SI
 
-Most of the code and text in this project, and the written concept, were produced by Claude Code
-(Anthropic), an SI assistant, at the team's request and under its direction. No SI runs in the
-website: every number comes from NASA data and the code in this repository, and verdicts are fixed
-sentence templates. The demo video's English voice-over is SI-generated (Kokoro text-to-speech)
-and is labelled in the video. No SI-generated images, music or data are used. Full record:
-[docs/AI_USE.md](docs/AI_USE.md). Prior work: none reused ([docs/REUSED.md](docs/REUSED.md)).
+Most of the code and text, the written concept and the demo video's voice-over were made with SI
+tools, under the team's direction. No SI runs in the website, and every number comes from NASA data
+and the code here. Full disclosure, as the NASA rules require: [docs/AI_USE.md](docs/AI_USE.md).
+Prior work: none reused ([docs/REUSED.md](docs/REUSED.md)).
 
 ## How it is built
 
