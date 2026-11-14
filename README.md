@@ -81,9 +81,12 @@ Science Division. All sources and licences: [docs/DATA_SOURCES.md](docs/DATA_SOU
 
 ## Use of SI
 
-Most of the code and text, the written concept and the demo video's voice-over were made with SI
-tools, under the team's direction. No SI runs in the website, and every number comes from NASA data
-and the code here. Full disclosure, as the NASA rules require: [docs/AI_USE.md](docs/AI_USE.md).
+As the NASA Space Apps rules require: Claude Code (Anthropic) wrote nearly all of the code and
+drafted the text, the written concept and a pre-event plan, under the team's direction. The demo
+video's English voice-over was generated with Kokoro-82M (open-weight text-to-speech), and the
+video was put together by scripts Claude wrote. No SI runs in the website, no data was generated
+by SI, and no SI-generated images or music are used.
+
 Prior work: none reused ([docs/REUSED.md](docs/REUSED.md)).
 
 ## How it is built
