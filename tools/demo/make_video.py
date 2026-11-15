@@ -1,5 +1,5 @@
 """Build the demo video: 1920x1080, the team's recorded voice, and burned-in English subtitles that
-match the spoken words. Scenes last as long as their spoken line; the video must stay under 30 s.
+match the spoken words. Each spoken line has one or more pictures; the video must stay under 30 s.
 
 Needs: screenshots from take_screenshots.py, the voice clips from use_recording.py, Playwright
 (to draw the title cards) and ffmpeg.
@@ -7,6 +7,7 @@ Usage: python tools/demo/make_video.py SCREENSHOT_FOLDER VOICE_FOLDER OUTPUT.mp4
 """
 
 import json
+import math
 import subprocess
 import sys
 import tempfile
@@ -18,18 +19,21 @@ FADE = 0.4         # seconds of cross-fade between scenes
 PAUSE = 0.12       # silence after each spoken line
 MIN_SCENE = 2.2    # shortest time a scene stays on screen (without the fade)
 MAX_LENGTH = 29.8  # the rules allow 30 seconds; keep a margin
+ZOOM = 0.04        # a screenshot grows by this share while it is shown, so the picture is never frozen
 
-# (image, crop) per scene. A crop (x, y, width) in screenshot pixels zooms in on the part that
-# matters, so the text can be read on a small screen; the height follows from 16:9.
+# The pictures shown during each spoken line: (image, crop, share of the line's time).
+# A crop (x, y, width) in screenshot pixels zooms in on the part that matters, so the text can be
+# read on a small screen; the height follows from 16:9.
 SCENES_IN_ORDER = [
-    ("card-team", None),
-    ("01-home.png", None),
-    ("06-explorer.png", (96, 90, 1728)),
-    ("02-jacobabad-day-night.png", (120, 135, 1680)),
-    ("04-hunza-not-yet.png", (120, 135, 1680)),
-    ("07-trend-map.png", (110, 100, 1700)),
-    ("05-greener-from-space.png", (120, 135, 1680)),
-    ("card-future", None),
+    [("card-team", None, 1)],
+    [("01-home.png", None, 1)],
+    [("06-explorer.png", (96, 90, 1728), 1)],
+    # "no trend in the average" over the average, "but the nights are warming" over day and night.
+    [("02a-jacobabad-average.png", (120, 135, 1680), 0.5), ("02-jacobabad-day-night.png", (120, 135, 1680), 0.5)],
+    [("04-hunza-not-yet.png", (120, 135, 1680), 1)],
+    [("07-trend-map.png", (110, 100, 1700), 1)],
+    [("05-greener-from-space.png", (120, 135, 1680), 1)],
+    [("card-future", None, 1)],
 ]
 
 CARD_STYLE = """
@@ -46,9 +50,10 @@ CARD_STYLE = """
 """
 
 CARDS = {
-    "card-team": """<div class="bar"></div><p class="small">NASA Space Apps Challenge 2026</p>
-        <h1>Ludilume Studios</h1><p>Talha Abid · Kainat Ijaz</p>
-        <p class="small">Challenge: Be An Earth System Trend Detective!</p>""",
+    "card-team": """<div class="bar"></div>
+        <p class="small">NASA Space Apps Challenge 2026 · Be An Earth System Trend Detective!</p>
+        <h1>Earth Trend Detective</h1><p>Is it really changing, or is it too soon to say?</p>
+        <p class="small">Team Ludilume Studios: Talha Abid · Kainat Ijaz</p>""",
     "card-future": """<div class="bar"></div><h1>Free. No login.<br>Every number traced to NASA data.</h1>
         <p>For classrooms in Pakistan, and everywhere.</p>
         <p class="url">earth-trend-detective.vercel.app</p>""",
@@ -66,20 +71,24 @@ def draw_cards(folder):
 
 
 def plan_scenes(voice_folder):
-    """Each scene: image, spoken line, voice clip, when it starts and how long it lasts."""
+    """Lines: the words, the voice clip and when it is spoken.
+    Shots: the picture, its crop, when it starts and how long it stays (with the fade)."""
     clips = json.loads((voice_folder / "lines.json").read_text())["clips"]
     if len(clips) != len(SCENES_IN_ORDER):
         raise SystemExit("The voice folder and make_video.py must have the same number of scenes")
-    scenes, start = [], 0.0
-    for (image, crop), clip in zip(SCENES_IN_ORDER, clips):
+    lines, shots, start = [], [], 0.0
+    for pictures, clip in zip(SCENES_IN_ORDER, clips):
         visible = max(clip["seconds"] + PAUSE, MIN_SCENE)
-        scenes.append({"image": image, "crop": crop, "text": clip["text"], "voice": voice_folder / clip["file"],
-                       "start": start, "seconds": visible + FADE, "speech": clip["seconds"]})
+        lines.append({"text": clip["text"], "voice": voice_folder / clip["file"], "start": start, "end": start + visible})
+        shot_start = start
+        for image, crop, share in pictures:
+            shots.append({"image": image, "crop": crop, "start": shot_start, "seconds": visible * share + FADE})
+            shot_start += visible * share
         start += visible
     length = start + FADE
     if length > MAX_LENGTH:
         raise SystemExit(f"Video would be {length:.1f} s; shorten the narration.")
-    return scenes, length
+    return lines, shots, length
 
 
 def ass_time(seconds):
@@ -87,7 +96,7 @@ def ass_time(seconds):
     return f"0:{int(minutes):02d}:{secs:05.2f}"
 
 
-def write_subtitles(path, scenes):
+def write_subtitles(path, spoken_lines):
     lines = [
         "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1920", "PlayResY: 1080", "",
         "[V4+ Styles]",
@@ -95,38 +104,51 @@ def write_subtitles(path, scenes):
         "Style: Default,Helvetica,50,&H00FFFFFF,&H20101010,&H20101010,1,3,14,0,2,120,120,60",
         "", "[Events]", "Format: Layer, Start, End, Style, Text",
     ]
-    for scene in scenes:
-        end = scene["start"] + scene["seconds"] - FADE
-        lines.append(f"Dialogue: 0,{ass_time(scene['start'] + 0.1)},{ass_time(end)},Default,{scene['text']}")
+    for spoken in spoken_lines:
+        lines.append(f"Dialogue: 0,{ass_time(spoken['start'] + 0.1)},{ass_time(spoken['end'])},Default,{spoken['text']}")
     path.write_text("\n".join(lines) + "\n")
 
 
-def build_video(scenes, length, shots, cards, subtitles, output):
+def shot_filter(shot):
+    """The ffmpeg filter that turns one picture into a 1920x1080 clip."""
+    crop = ""
+    if shot["crop"]:
+        x, y, width = shot["crop"]
+        crop = f"crop={width}:{round(width * 9 / 16)}:{x}:{y},"
+    if shot["image"].startswith("card-") or ZOOM == 0:
+        return f"{crop}scale=1920:1080:flags=lanczos,setsar=1,fps=30,format=yuv420p"
+    # A slow push-in. The picture is enlarged first so the zoom moves in steps smaller than a pixel.
+    frames = math.ceil(shot["seconds"] * 30)
+    return (f"{crop}scale=3840:2160:flags=lanczos,"
+            f"zoompan=z='1+{ZOOM}*on/{frames}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d={frames}:s=1920x1080:fps=30,"
+            f"trim=duration={shot['seconds']:.2f},setsar=1,format=yuv420p")
+
+
+def build_video(spoken_lines, shots, length, shot_folder, cards, subtitles, output):
     inputs, filters = [], []
-    for i, scene in enumerate(scenes):
-        image = scene["image"]
-        file = (cards / f"{image}.png") if image.startswith("card-") else (shots / image)
-        inputs += ["-loop", "1", "-t", f"{scene['seconds']:.2f}", "-i", str(file)]
-        zoom = ""
-        if scene["crop"]:
-            x, y, width = scene["crop"]
-            zoom = f"crop={width}:{round(width * 9 / 16)}:{x}:{y},"
-        filters.append(f"[{i}:v]{zoom}scale=1920:1080:flags=lanczos,setsar=1,fps=30,format=yuv420p[v{i}]")
+    for i, shot in enumerate(shots):
+        image = shot["image"]
+        if image.startswith("card-") or ZOOM == 0:
+            file = (cards / f"{image}.png") if image.startswith("card-") else (shot_folder / image)
+            inputs += ["-loop", "1", "-t", f"{shot['seconds']:.2f}", "-i", str(file)]
+        else:
+            inputs += ["-i", str(shot_folder / image)]
+        filters.append(f"[{i}:v]{shot_filter(shot)}[v{i}]")
     previous = "v0"
-    for i in range(1, len(scenes)):
-        filters.append(f"[{previous}][v{i}]xfade=transition=fade:duration={FADE}:offset={scenes[i]['start']:.2f}[x{i}]")
+    for i in range(1, len(shots)):
+        filters.append(f"[{previous}][v{i}]xfade=transition=fade:duration={FADE}:offset={shots[i]['start']:.2f}[x{i}]")
         previous = f"x{i}"
     filters.append(f"[{previous}]subtitles={subtitles}[video]")
 
-    # Each voice clip starts 0.1 s after its scene begins.
-    first_voice = len(scenes)
-    for i, scene in enumerate(scenes):
-        inputs += ["-i", str(scene["voice"])]
-        delay = int((scene["start"] + 0.1) * 1000)
+    # Each voice clip starts 0.1 s after its line begins.
+    first_voice = len(shots)
+    for i, spoken in enumerate(spoken_lines):
+        inputs += ["-i", str(spoken["voice"])]
+        delay = int((spoken["start"] + 0.1) * 1000)
         filters.append(f"[{first_voice + i}:a]aresample=48000,adelay={delay}|{delay}[a{i}]")
-    mixed = "".join(f"[a{i}]" for i in range(len(scenes)))
+    mixed = "".join(f"[a{i}]" for i in range(len(spoken_lines)))
     # Loudness about -14 LUFS, the level YouTube plays at.
-    filters.append(f"{mixed}amix=inputs={len(scenes)}:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,"
+    filters.append(f"{mixed}amix=inputs={len(spoken_lines)}:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,"
                    f"aresample=48000,apad,atrim=0:{length:.2f}[audio]")
 
     command = [
@@ -145,13 +167,13 @@ def build_video(scenes, length, shots, cards, subtitles, output):
 
 
 def main():
-    shots, voice_folder, output = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-    scenes, length = plan_scenes(voice_folder)
+    shot_folder, voice_folder, output = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+    spoken_lines, shots, length = plan_scenes(voice_folder)
     with tempfile.TemporaryDirectory() as temp:
         temp = Path(temp)
         draw_cards(temp)
-        write_subtitles(temp / "subtitles.ass", scenes)
-        build_video(scenes, length, shots, temp, temp / "subtitles.ass", output)
+        write_subtitles(temp / "subtitles.ass", spoken_lines)
+        build_video(spoken_lines, shots, length, shot_folder, temp, temp / "subtitles.ass", output)
     print(f"{length:.1f} s ->", output)
 
 
