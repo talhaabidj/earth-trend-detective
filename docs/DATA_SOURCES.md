@@ -35,7 +35,6 @@ Explorer (partner resource), which we looked at as an existing tool.
 | pytest | tests | MIT |
 | Playwright (Python) | headless browser to take the screenshots for the README and demo video (`tools/demo/`) | Apache-2.0 |
 | ffmpeg | building the demo video | LGPL-2.1+ / GPL |
-| faster-whisper with the Whisper small.en model | speech-to-text, used once to find where each line starts in the team's voice recording for the demo video | MIT |
 
 The web page has no other dependencies and no build step. Charts are our own SVG code.
 

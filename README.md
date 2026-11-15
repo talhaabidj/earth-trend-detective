@@ -8,7 +8,7 @@ removes the seasons, runs two statistical tests, and answers in plain words: **y
 A map then shows *where* around that place the same variable is rising, falling or not changing.
 
 - **Live site:** https://earth-trend-detective.vercel.app (free, no login, works on phones)
-- **Demo video (29 s):** https://earth-trend-detective.vercel.app/demo
+- **Demo video (29 s, voice: Talha Abid):** https://earth-trend-detective.vercel.app/demo
 - **Team:** Ludilume Studios: Talha Abid (Pakistan) and Kainat Ijaz (USA)
 - **Challenge:** NASA Space Apps 2026, "Be An Earth System Trend Detective!"
 - **Made during the event**, 14–15 November 2026. MIT licence.
@@ -89,15 +89,19 @@ Science Division. All sources and licences: [docs/DATA_SOURCES.md](docs/DATA_SOU
 
 ## Use of SI
 
-Claude Code (Anthropic) helped with the code, the documentation and rendering the demo video.
+We used Claude Code (Anthropic), an SI coding assistant, to write and test the code, to draft the
+documentation and project text, and to assemble the demo video from screenshots of our site. The
+team directed the work, made the decisions and recorded the voice-over. No SI runs inside the
+tool: every number comes from NASA data and open, tested code, and the verdicts are fixed sentence
+templates filled with computed numbers. No SI-generated images, audio or data are used.
 
 Prior work: none reused ([docs/REUSED.md](docs/REUSED.md)).
 
 ## How it is built
 
 - `web/`: the website. Plain HTML, CSS and JavaScript, no build step. Our own SVG charts; Leaflet
-  for maps; Open-Meteo's free geocoding for the place search. Light and dark themes, keyboard and
-  screen-reader support. Hosted on Vercel's free plan.
+  for maps; Open-Meteo's free geocoding for the place search. Light and dark themes, keyboard use,
+  and no issues in an automated accessibility check (axe, WCAG 2.1 AA). Hosted on Vercel's free plan.
 - `web/js/stats.js`: the statistics, run in the visitor's browser.
 - `engine/`: the same statistics in Python, the tests, and scripts that build the examples.
 
