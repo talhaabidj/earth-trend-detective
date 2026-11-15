@@ -114,6 +114,10 @@ All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push 
 
 - POWER is a model-based product at about 50 km, not a weather station. City-scale effects (such as
   a city's own heat island) are smoothed out.
+- MERRA-2 is a reanalysis: a weather model corrected with the measurements available at each time.
+  Those measurements changed over the years (new satellites, more or fewer ground stations), and
+  such changes can add to or hide a real trend. Temperature is the most reliable variable; rain,
+  humidity and soil wetness are less so. Treat a result as a lead to check against local records.
 - A linear trend is a summary. Real changes can speed up, slow down or jump.
 - The seasonal Mann-Kendall test assumes the 12 months are independent of each other; strong
   autocorrelation makes it too confident. That is why we also run test 2 and only say "Yes" when

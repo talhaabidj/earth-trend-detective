@@ -106,6 +106,11 @@ STORIES = [
 FIRST_YEAR = {"ALLSKY_SFC_SW_DWN": 2001, "CLOUD_AMT": 2001}
 
 
+def coordinates(lat, lon):
+    """28.28, 68.44 -> '28.28°N, 68.44°E', the same form the website uses."""
+    return f"{abs(lat):.2f}°{'N' if lat >= 0 else 'S'}, {abs(lon):.2f}°{'E' if lon >= 0 else 'W'}"
+
+
 def get_rows(place, variable):
     lat, lon = PLACES[place]
     if variable == "NDVI":
@@ -135,7 +140,7 @@ def build_panel(place, variable, expected_verdict):
         "lat": lat,
         "lon": lon,
         "variable": variable,
-        "label": f"{place} ({lat:.2f}°, {lon:.2f}°)" + (", 5 km x 5 km window" if variable == "NDVI" else ""),
+        "label": f"{place} ({coordinates(lat, lon)})" + (", 5 km x 5 km window" if variable == "NDVI" else ""),
         "source_url": source_url,
         "source_info": info,
         "cells": 1,
