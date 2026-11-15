@@ -311,6 +311,15 @@ input[type="number"], input[type="search"], select { font: inherit; color: var(-
 .pin { background: none; border: 0; }
 .pin-drop { display: block; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.35)); }
 .warnings { margin: 0 0 12px; padding-left: 20px; color: var(--text-secondary); font-size: 14.5px; }
+.second-opinion { border: 1px solid var(--border); border-left: 5px solid var(--none); border-radius: 10px; padding: 12px 14px; margin: 0 0 14px; font-size: 14.5px; color: var(--text-primary); background: var(--surface-1); }
+.second-opinion p { margin: 0 0 4px; }
+.second-opinion p:last-child { margin-bottom: 0; }
+.second-opinion-title { font-weight: 700; }
+.second-opinion.agree { border-left-color: var(--clear); }
+.second-opinion.disagree { border-left-color: var(--mixed); background: var(--mixed-bg); }
+.second-opinion.missing { color: var(--text-secondary); }
+.second-opinion-source { font-size: 13px; color: var(--text-muted); }
+.hero-case .second-opinion { display: none; }
 .result-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--border); }
 .result-tabs button { font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; padding: 9px 13px; background: none; border: 0; border-bottom: 3px solid transparent; color: var(--text-secondary); cursor: pointer; margin-bottom: -1px; }
 .result-tabs button:hover { color: var(--text-primary); }

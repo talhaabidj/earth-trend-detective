@@ -339,7 +339,7 @@ function compareBox(grid, variable) {
       const { rows, url, cells } = await getMonthlyData(variable.id, placeForDownload(place), variable.startYear);
       grid.querySelectorAll(".result:not(:first-child)").forEach((old) => old.remove());
       grid.classList.add("two");
-      showResult(grid, { rows, variable, label: placeLabel(place), sourceUrl: url, cells });
+      showResult(grid, { rows, variable, label: placeLabel(place), sourceUrl: url, cells, place: { lat: place.lat, lon: place.lon } });
       showStatus("");
     } catch (error) {
       showStatus(`${error.message} Try again in a moment.`, "error");
@@ -427,7 +427,7 @@ async function runTest() {
     const grid = document.createElement("div");
     grid.className = "compare-grid";
     results.appendChild(grid);
-    showResult(grid, { rows, variable, label, sourceUrl: url, cells });
+    showResult(grid, { rows, variable, label, sourceUrl: url, cells, place: { lat: choice.lat, lon: choice.lon } });
     results.append(resultButtons(rows, variable, label), compareBox(grid, variable));
     results.hidden = false;
     byId("results-empty").hidden = true;

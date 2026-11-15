@@ -2,9 +2,10 @@
 // numbers behind the verdict. Used by the explorer (app.js) and by the examples (stories.js).
 
 import { analyse } from "./stats.js";
-import { describe, signed } from "./verdict.js";
+import { decadeRate, describe, signed } from "./verdict.js";
 import { lineChart, monthBars, yearStripes } from "./charts.js";
 import { countUp } from "./motion.js";
+import { showSecondOpinion } from "./second-opinion.js";
 
 // Text from a link or a search (like a place name) must never be read as HTML.
 export function escapeHtml(text) {
@@ -87,7 +88,9 @@ function panelHtml(tab, variable, text, yearly) {
 
 let resultCount = 0;
 
-export function showResult(container, { rows, variable, label, sourceUrl, cells = 1 }) {
+// place is { lat, lon }; with it, an average-temperature result also gets a second opinion from
+// the nearest weather station.
+export function showResult(container, { rows, variable, label, sourceUrl, cells = 1, place = null }) {
   const { result, usual, anomalies } = analyse(rows);
   const text = describe(result, variable);
   const id = `result-${++resultCount}`;
@@ -124,6 +127,7 @@ export function showResult(container, { rows, variable, label, sourceUrl, cells 
       <a href="${sourceUrl}" target="_blank" rel="noopener">See the exact data request</a></p>`;
   container.appendChild(block);
   if (!text.hasTrend) return { block, result };
+  if (place && variable.id === "T2M") showSecondOpinion(block, place, result.verdict, decadeRate(result).rate);
 
   const yearly = yearlySummary(rows, anomalies);
   const where = `${variable.name} at ${label}, ${result.first_year} to ${result.last_year}`;

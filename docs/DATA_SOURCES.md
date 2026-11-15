@@ -21,8 +21,8 @@ version each time it runs).
 **Station data used as an outside check (not NASA):** NOAA GHCN-Monthly version 4, adjusted
 monthly average temperatures (Menne et al., 2018), from
 https://www.ncei.noaa.gov/pub/data/ghcn/v4/, accessed 15 November 2026. This is the station set
-that NASA's GISTEMP analysis is built on. Used only in `engine/scripts/station_check.py` and in
-METHODS section 7. US Government open data.
+that NASA's GISTEMP analysis is built on. Used in `engine/scripts/station_check.py` (METHODS section 7) and in
+`engine/scripts/build_stations.py`, which makes `web/data/stations.json` for the site's second opinion. US Government open data.
 
 Resources from the challenge page that informed the work: Giovanni (NASA GES DISC), the NASA NTRS
 paper on SeaWiFS chlorophyll time-series and significance testing

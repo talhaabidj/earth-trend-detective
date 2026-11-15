@@ -74,6 +74,9 @@ stations at Jacobabad and Lahore show the average temperature rising, which the 
 - **Odd data handled:** places with no data, values that never change (soil wetness over open
   ocean) and values that are zero in most months (snow in a desert) get a plain message, not a
   misleading verdict.
+- **A second opinion from a thermometer, in the tool:** for average temperature, each result shows
+  what the nearest long weather station record says (6,717 stations worldwide, same tests) and
+  whether it agrees with the NASA model. When they disagree, the site says so.
 - **Checked against thermometers, and the result reported as it is:** we compared POWER's average
   temperature with weather station records (NOAA GHCN-Monthly v4) at five places. At Phoenix,
   Manaus and Svalbard both show clear warming. At Jacobabad and Lahore the stations show clear

@@ -142,6 +142,14 @@ What this shows:
   the model. The site says this in its limits, and the Jacobabad and Lahore examples carry a
   caution.
 
+**In the tool.** Because of this, every average-temperature result on the site now carries a
+"second opinion from a thermometer": the answer of the nearest station within 60 km, from the same
+tests, and whether it agrees with the NASA model (both show a clear trend the same way, or neither
+shows a clear trend). The station answers are worked out ahead of time by
+`engine/scripts/build_stations.py` for the 6,717 stations that have at least 75% of the months from
+1981 to 2025 and are still reporting, and are stored in `web/data/stations.json`. Where no such
+station is near, the site says that the model's answer could not be checked.
+
 Only the average temperature could be checked this way: GHCN-Monthly has no separate day and night
 values, so the night-time result for Jacobabad is not confirmed or contradicted by this check.
 

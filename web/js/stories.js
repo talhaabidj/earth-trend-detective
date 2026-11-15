@@ -42,6 +42,7 @@ function showPanel(container, panel) {
     label: panel.label,
     sourceUrl: panel.source_url,
     cells: panel.cells,
+    place: { lat: panel.lat, lon: panel.lon },
   });
 }
 
