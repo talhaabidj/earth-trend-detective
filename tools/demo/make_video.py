@@ -1,7 +1,7 @@
-"""Build the demo video: 1920x1080, an English voice-over, and burned-in English subtitles that
+"""Build the demo video: 1920x1080, the team's recorded voice, and burned-in English subtitles that
 match the spoken words. Scenes last as long as their spoken line; the video must stay under 30 s.
 
-Needs: screenshots from take_screenshots.py, the voice clips from make_narration.py, Playwright
+Needs: screenshots from take_screenshots.py, the voice clips from use_recording.py, Playwright
 (to draw the title cards) and ffmpeg.
 Usage: python tools/demo/make_video.py SCREENSHOT_FOLDER VOICE_FOLDER OUTPUT.mp4
 """
@@ -15,9 +15,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 FADE = 0.4         # seconds of cross-fade between scenes
-PAUSE = 0.2        # silence after each spoken line
-MIN_SCENE = 2.5    # shortest time a scene stays on screen (without the fade)
-MAX_LENGTH = 29.5  # the rules allow 30 seconds; keep a margin
+PAUSE = 0.12       # silence after each spoken line
+MIN_SCENE = 2.2    # shortest time a scene stays on screen (without the fade)
+MAX_LENGTH = 29.8  # the rules allow 30 seconds; keep a margin
 
 # (image, crop) per scene. A crop (x, y, width) in screenshot pixels zooms in on the part that
 # matters, so the text can be read on a small screen; the height follows from 16:9.
@@ -69,7 +69,7 @@ def plan_scenes(voice_folder):
     """Each scene: image, spoken line, voice clip, when it starts and how long it lasts."""
     clips = json.loads((voice_folder / "lines.json").read_text())["clips"]
     if len(clips) != len(SCENES_IN_ORDER):
-        raise SystemExit("make_narration.py and make_video.py must have the same number of scenes")
+        raise SystemExit("The voice folder and make_video.py must have the same number of scenes")
     scenes, start = [], 0.0
     for (image, crop), clip in zip(SCENES_IN_ORDER, clips):
         visible = max(clip["seconds"] + PAUSE, MIN_SCENE)
