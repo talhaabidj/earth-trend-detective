@@ -8,7 +8,7 @@ removes the seasons, runs two statistical tests, and answers in plain words: **y
 A map then shows *where* around that place the same variable is rising, falling or not changing.
 
 - **Live site:** https://earth-trend-detective.vercel.app (free, no login, works on phones)
-- **Demo video (29 s, voice: Talha Abid):** https://earth-trend-detective.vercel.app/demo
+- **Demo video (29 s, voice: Talha Abid):** https://earth-trend-detective.vercel.app/demo (also on YouTube: https://youtu.be/Q2ychEwXGpg)
 - **Team:** Ludilume Studios: Talha Abid (Pakistan) and Kainat Ijaz (USA)
 - **Challenge:** NASA Space Apps 2026, "Be An Earth System Trend Detective!"
 - **Made during the event**, 14–15 November 2026. MIT licence.
