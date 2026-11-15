@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 SITE = sys.argv[2] if len(sys.argv) > 2 else "https://earth-trend-detective.vercel.app/"
 
 
-def scroll_to(page, selector, offset=16):
+def scroll_to(page, selector, offset=72):
     page.evaluate(
         "([sel, off]) => { const el = document.querySelector(sel); window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - off); }",
         [selector, offset],
@@ -62,7 +62,7 @@ def main():
         page.click("#map-run")
         page.wait_for_function("document.getElementById('map-summary').textContent.length > 0", timeout=90000)
         page.wait_for_timeout(2500)
-        scroll_to(page, "#map-question", 60)
+        scroll_to(page, "#map-question", 120)
         page.screenshot(path=out / "07-trend-map.png")
         browser.close()
     print("saved", sorted(f.name for f in out.glob("*.png")))

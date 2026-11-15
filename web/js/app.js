@@ -6,6 +6,7 @@ import { showResult } from "./result-view.js";
 import { setUpPlaceSearch } from "./search.js";
 import { showStoryList, showHeroCase } from "./stories.js";
 import { mapTrends } from "./trend-map.js";
+import { revealOnScroll, countWhenSeen, followScroll } from "./motion.js";
 
 const QUICK_PLACES = [
   { name: "Lahore", lat: 31.55, lon: 74.34 },
@@ -118,6 +119,7 @@ function setPlace(lat, lon, name = "") {
   byId("chosen-place").textContent = `Chosen: ${placeLabel()}`;
   if (map) {
     marker.setLatLng([choice.lat, choice.lon]);
+    marker.setIcon(pinIcon()); // a fresh icon replays the drop
     drawBoxOnMap();
   }
   for (const button of document.querySelectorAll("#presets .chip")) {
@@ -144,13 +146,25 @@ function newMap(elementId, zoom, maxZoom) {
   return leafletMap;
 }
 
+// A pin drawn in the page (no image file), so it can drop in when the place changes.
+function pinIcon() {
+  return L.divIcon({
+    className: "pin",
+    iconSize: [30, 40],
+    iconAnchor: [15, 38],
+    html: '<span class="pin-drop"><svg viewBox="0 0 30 40" width="30" height="40" aria-hidden="true">' +
+      '<path d="M15 1C7.3 1 1 7.2 1 14.9 1 25 15 39 15 39s14-14 14-24.1C29 7.2 22.7 1 15 1z" fill="#1c5cab" stroke="#fff" stroke-width="2"/>' +
+      '<circle cx="15" cy="15" r="5" fill="#fff"/></svg></span>',
+  });
+}
+
 function setUpMap() {
   if (!window.L) {
     byId("map").textContent = "The map could not load. Search for a place instead.";
     return;
   }
   map = newMap("map", 4, 12);
-  marker = L.marker([choice.lat, choice.lon], { keyboard: false }).addTo(map);
+  marker = L.marker([choice.lat, choice.lon], { keyboard: false, icon: pinIcon() }).addTo(map);
   map.on("click", (event) => {
     setPlace(event.latlng.lat, event.latlng.lng);
     byId("place-search").value = "";
@@ -371,6 +385,29 @@ function resultButtons(rows, variable, label) {
   return buttons;
 }
 
+// While NASA answers: grey placeholder shapes the first time, a dimmed old result after that.
+function showLoading() {
+  const results = byId("results");
+  if (results.hidden) {
+    byId("results-empty").hidden = true;
+    results.hidden = false;
+    results.innerHTML = '<div class="result skeleton" aria-hidden="true"><div class="bone short"></div>' +
+      '<div class="bone title"></div><div class="bone block"></div><div class="bone chart"></div></div>';
+  } else {
+    results.classList.add("refreshing");
+  }
+}
+
+function stopLoading(failed) {
+  const results = byId("results");
+  results.classList.remove("refreshing");
+  if (failed && results.querySelector(".skeleton")) {
+    results.replaceChildren();
+    results.hidden = true;
+    byId("results-empty").hidden = false;
+  }
+}
+
 async function runTest() {
   clearTimeout(runTimer);
   const thisRun = ++latestRun;
@@ -381,9 +418,11 @@ async function runTest() {
   byId("run").disabled = true;
   showStatus(`Asking NASA for ${variable.name.toLowerCase()} at ${choice.placeName || "this place"}…`, "busy");
   writeChoiceToLink();
+  showLoading();
   try {
     const { rows, url, cells } = await getMonthlyData(variable.id, place, variable.startYear);
     if (thisRun !== latestRun) return; // the visitor has already asked for something newer
+    stopLoading(false);
     results.replaceChildren();
     const grid = document.createElement("div");
     grid.className = "compare-grid";
@@ -397,6 +436,7 @@ async function runTest() {
     if (top < 0 || top > window.innerHeight * 0.6) byId("status").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     if (thisRun !== latestRun) return;
+    stopLoading(true);
     showStatus(`${error.message} Try again in a moment, or open one of the solved cases above.`, "error");
   } finally {
     if (thisRun === latestRun) byId("run").disabled = false;
@@ -488,6 +528,9 @@ function start() {
     byId("examples").scrollIntoView({ behavior: "smooth" });
     byId("story-list").querySelector(".story-card")?.focus({ preventScroll: true });
   });
+  followScroll(byId("top-bar"), [...document.querySelectorAll(".top-nav a")]);
+  revealOnScroll();
+  countWhenSeen();
   if (linkHasResult) runTest();
 }
 

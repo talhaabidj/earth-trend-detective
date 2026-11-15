@@ -24,11 +24,11 @@ MAX_LENGTH = 29.5  # the rules allow 30 seconds; keep a margin
 SCENES_IN_ORDER = [
     ("card-team", None),
     ("01-home.png", None),
-    ("06-explorer.png", (96, 0, 1728)),
-    ("02-jacobabad-day-night.png", (120, 270, 1680)),
-    ("04-hunza-not-yet.png", (120, 280, 1680)),
-    ("07-trend-map.png", (110, 20, 1700)),
-    ("05-greener-from-space.png", (120, 270, 1680)),
+    ("06-explorer.png", (96, 90, 1728)),
+    ("02-jacobabad-day-night.png", (120, 135, 1680)),
+    ("04-hunza-not-yet.png", (120, 135, 1680)),
+    ("07-trend-map.png", (110, 100, 1700)),
+    ("05-greener-from-space.png", (120, 135, 1680)),
     ("card-future", None),
 ]
 

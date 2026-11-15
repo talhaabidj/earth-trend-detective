@@ -2,8 +2,9 @@
 // numbers behind the verdict. Used by the explorer (app.js) and by the examples (stories.js).
 
 import { analyse } from "./stats.js";
-import { describe } from "./verdict.js";
-import { lineChart, monthBars } from "./charts.js";
+import { describe, signed } from "./verdict.js";
+import { lineChart, monthBars, yearStripes } from "./charts.js";
+import { countUp } from "./motion.js";
 
 // Text from a link or a search (like a place name) must never be read as HTML.
 export function escapeHtml(text) {
@@ -108,6 +109,11 @@ export function showResult(container, { rows, variable, label, sourceUrl, cells 
         <p>${text.body}</p>
       </div>
     </div>
+    ${text.hasTrend ? `
+    <div class="tiles">
+      ${text.tiles.map((tile, i) => `<div class="tile"><span class="tile-label">${tile.label}</span><span class="tile-value" data-tile="${i}">${tile.text ?? ""}</span></div>`).join("")}
+    </div>
+    <div class="stripe-box"></div>` : ""}
     ${warnings.length ? `<ul class="warnings">${warnings.map((w) => `<li>${w}</li>`).join("")}</ul>` : ""}
     ${text.hasTrend ? `
     <div class="result-tabs" role="tablist" aria-label="Views of this result">
@@ -124,21 +130,36 @@ export function showResult(container, { rows, variable, label, sourceUrl, cells 
   const valid = rows.filter((r) => r.value !== null).map((r) => r.value);
   const panel = block.querySelector(".result-panel");
   let openTab = "trend";
+  const seenTabs = new Set(); // a chart draws itself in only the first time its tab is opened
+
+  const units = variable.units ? ` ${variable.units}` : "";
+  text.tiles.forEach((tile, i) => {
+    if (tile.value === null) return;
+    countUp(block.querySelector(`[data-tile="${i}"]`), tile.value, (n) => `${signed(n, variable.decimals)}${units}`);
+  });
+  if (yearly.length >= 5) {
+    yearStripes(block.querySelector(".stripe-box"), {
+      years: yearly.map((y) => ({ year: y.year, anomaly: y.anomaly })), units: variable.units, decimals: variable.decimals, animate: true,
+    });
+  }
 
   const charts = {
-    trend: (box) => lineChart(box, {
+    trend: (box, animate) => lineChart(box, {
+      animate,
       points: rows.map((row, i) => ({ x: yearFraction(row), y: Number.isFinite(anomalies[i]) ? anomalies[i] : null, label: monthLabel(row) })),
       yearly: yearly.map((y) => ({ x: y.year + 0.5, y: y.anomaly, label: String(y.year) })),
       trend: { slope: text.rate / 10, low: text.low / 10, high: text.high / 10 },
       units: variable.units, decimals: variable.decimals, zeroLine: true, height: 260,
       description: `Line chart of monthly differences from usual for ${where}, with yearly averages and a trend line. ${text.title}.`,
     }),
-    raw: (box) => lineChart(box, {
+    raw: (box, animate) => lineChart(box, {
+      animate,
       points: rows.map((row) => ({ x: yearFraction(row), y: row.value, label: monthLabel(row) })),
       units: variable.units, decimals: variable.decimals, height: 260,
       description: `Line chart of monthly values for ${where}, from ${Math.min(...valid).toFixed(variable.decimals)} to ${Math.max(...valid).toFixed(variable.decimals)}.`,
     }),
-    seasons: (box) => monthBars(box, {
+    seasons: (box, animate) => monthBars(box, {
+      animate,
       usual, units: variable.units, decimals: variable.decimals, height: 240,
       description: `Bar chart of the usual value for each month: highest in ${monthName(usual.indexOf(Math.max(...usual)))}, lowest in ${monthName(usual.indexOf(Math.min(...usual)))}.`,
     }),
@@ -146,7 +167,9 @@ export function showResult(container, { rows, variable, label, sourceUrl, cells 
 
   function draw() {
     const box = panel.querySelector("[data-chart]");
-    if (box) charts[box.dataset.chart](box);
+    if (!box) return;
+    charts[box.dataset.chart](box, !seenTabs.has(openTab));
+    seenTabs.add(openTab);
   }
 
   function open(tab) {

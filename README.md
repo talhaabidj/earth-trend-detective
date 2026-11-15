@@ -29,7 +29,7 @@ does the statistics honestly and explains the answer, including when the honest 
 |---|---|
 | Identify variables of interest | 14 NASA variables in four themes (heat, rain and water, air and sky, snow and cold), each with a one-line plain definition and why it matters. One-click starter questions, and a "what kind of place is this?" helper that suggests where to start for cities, deserts, mountains, farmland, rainforests and coasts. |
 | Get the data for a region | Search a city, click the map, or use your own location, anywhere on Earth. Choose one grid cell (about 50 km) or a 2° × 2° area (cells averaged by size). For the map, every cell in a 6° or 10° box. |
-| Make and show a long time series | Monthly data from 1981 to 2025, in tabs: the series with seasons removed (with yearly averages and the trend), the raw series, the usual seasonal cycle, and a yearly table. |
+| Make and show a long time series | Monthly data from 1981 to 2025: three key numbers, a band of year stripes (blue for years below usual, red for years above), and tabs with the series with seasons removed (yearly averages and the trend), the raw series, the usual seasonal cycle, and a yearly table. |
 | Test the trend's rate and significance | Seasonal Mann-Kendall test with the Sen slope and a 95% range, and a straight-line test that allows for month-to-month memory. "Yes" only when both agree. If not significant, an estimate of how many more years would settle it. |
 
 It also includes **four step-by-step examples** (the challenge asks for demonstration examples)

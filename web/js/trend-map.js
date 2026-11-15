@@ -105,12 +105,15 @@ export async function mapTrends(map, layerGroup, variable, box, onCellClick) {
   layerGroup.clearLayers();
   for (const cell of cells) {
     const bounds = [[cell.lat - HALF_CELL.lat, cell.lon - HALF_CELL.lon], [cell.lat + HALF_CELL.lat, cell.lon + HALF_CELL.lon]];
-    const rectangle = L.rectangle(bounds, { stroke: true, color: "#ffffff", weight: 0.5, fillColor: cellColour(cell, biggestRate), fillOpacity: 0.78 });
+    const rectangle = L.rectangle(bounds, { stroke: true, color: "#ffffff", weight: 0.5, fillColor: cellColour(cell, biggestRate), fillOpacity: 0.78, className: "trend-cell" });
     const units = variable.units ? ` ${variable.units}` : "";
     const rateLine = Number.isFinite(cell.rate) ? `${signed(cell.rate, variable.decimals)}${units} per decade<br>` : "";
     rectangle.bindTooltip(`${cell.lat.toFixed(2)}°, ${cell.lon.toFixed(2)}°<br>${rateLine}${KIND_TEXT[cell.kind]}`);
     rectangle.on("click", () => onCellClick(cell.lat, cell.lon));
     layerGroup.addLayer(rectangle);
+    // Cells appear in a ripple outward from the middle of the box.
+    const distance = Math.hypot(cell.lat - (box.south + box.north) / 2, cell.lon - (box.west + box.east) / 2);
+    rectangle.getElement()?.style.setProperty("animation-delay", `${Math.round(distance * 70)}ms`);
   }
   map.fitBounds([[box.south, box.west], [box.north, box.east]]);
   return { summary: summaryText(cells, variable), legend: legendHtml(variable, biggestRate), url, cells };

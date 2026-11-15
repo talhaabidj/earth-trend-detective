@@ -120,8 +120,9 @@ function linePath(points, xOf, yOf) {
 // trend (optional): {slope, low, high} per year, drawn through y = 0 at the middle of the record,
 //   with the range between the low and high slopes shaded.
 // yearly (optional): yearly averages drawn as dots on top of a faded monthly line.
-export function lineChart(container, { points, units, decimals = 2, height = 240, zeroLine = false, trend = null, yearly = null, description = "" }) {
+export function lineChart(container, { points, units, decimals = 2, height = 240, zeroLine = false, trend = null, yearly = null, description = "", animate = false }) {
   const chart = newChart(container, height, description);
+  if (animate) chart.svg.classList.add("animate");
   const valid = points.filter(hasValue);
   if (!valid.length) return;
 
@@ -160,16 +161,17 @@ export function lineChart(container, { points, units, decimals = 2, height = 240
       ];
       svgElement("polygon", { points: corners.map(([x, y]) => `${xOf(x)},${yOf(y)}`).join(" "), class: "trend-band" }, chart.svg);
     }
-    svgElement("line", {
-      class: "trend-line",
-      x1: xOf(firstX), y1: yOf(at(trend.slope, firstX)), x2: xOf(lastX), y2: yOf(at(trend.slope, lastX)),
+    // pathLength 1 lets the stylesheet draw the line in from left to right.
+    svgElement("path", {
+      class: "trend-line", pathLength: 1,
+      d: `M${xOf(firstX)},${yOf(at(trend.slope, firstX))}L${xOf(lastX)},${yOf(at(trend.slope, lastX))}`,
     }, chart.svg);
   }
 
   svgElement("path", { d: linePath(points, xOf, yOf), class: yearly ? "series-line faded" : "series-line" }, chart.svg);
 
   if (yearly) {
-    svgElement("path", { d: linePath(yearly, xOf, yOf), class: "yearly-line" }, chart.svg);
+    svgElement("path", { d: linePath(yearly, xOf, yOf), class: "yearly-line", pathLength: 1 }, chart.svg);
     for (const point of yearly.filter(hasValue)) {
       svgElement("circle", { cx: xOf(point.x), cy: yOf(point.y), r: 3.5, class: "yearly-dot" }, chart.svg);
     }
@@ -179,8 +181,9 @@ export function lineChart(container, { points, units, decimals = 2, height = 240
 }
 
 // Twelve bars, one per calendar month. usual[0] is January.
-export function monthBars(container, { usual, units, decimals = 2, height = 180, description = "" }) {
+export function monthBars(container, { usual, units, decimals = 2, height = 180, description = "", animate = false }) {
   const chart = newChart(container, height, description);
+  if (animate) chart.svg.classList.add("animate");
   const values = usual.filter(Number.isFinite);
   let minY = Math.min(0, ...values);
   let maxY = Math.max(0, ...values);
@@ -211,4 +214,34 @@ export function monthBars(container, { usual, units, decimals = 2, height = 180,
 
   const points = usual.map((value, month) => ({ x: month, y: value, label: MONTH_NAMES[month] }));
   addHover(container, chart, points, xOf, yOf, (p) => `<strong>${p.label}</strong><br>usually ${p.y.toFixed(decimals)} ${units}`);
+}
+
+// Nine colours from "well below usual" (blue) through neutral to "well above usual" (red).
+const STRIPE_COLOURS = ["#184f95", "#2a78d6", "#6da7ec", "#b7d3f6", "var(--stripe-middle)", "#f3c2bd", "#eb8a82", "#e34948", "#a8302f"];
+
+// One stripe per year, coloured by how far that year was from usual. Inspired by Ed Hawkins's
+// warming stripes (showyourstripes.info); drawn here from this place's own NASA data.
+// years: [{year, anomaly}]
+export function yearStripes(container, { years, units, decimals = 2, animate = false }) {
+  container.replaceChildren();
+  const biggest = Math.max(...years.map((y) => Math.abs(y.anomaly)), 1e-9);
+  const band = document.createElement("div");
+  band.className = animate ? "stripes animate" : "stripes";
+  band.setAttribute("role", "img");
+  const first = years[0];
+  const last = years[years.length - 1];
+  band.setAttribute("aria-label", `One stripe per year from ${first.year} to ${last.year}: blue years were below usual, red years above. ` +
+    `${first.year} was ${first.anomaly.toFixed(decimals)} and ${last.year} was ${last.anomaly.toFixed(decimals)} ${units} from usual.`);
+  years.forEach((y, index) => {
+    const stripe = document.createElement("span");
+    const step = Math.round((y.anomaly / biggest) * 4) + 4;
+    stripe.style.background = STRIPE_COLOURS[Math.min(8, Math.max(0, step))];
+    stripe.style.setProperty("--order", index);
+    stripe.title = `${y.year}: ${y.anomaly > 0 ? "+" : ""}${y.anomaly.toFixed(decimals)} ${units} from usual`.trim();
+    band.appendChild(stripe);
+  });
+  const labels = document.createElement("div");
+  labels.className = "stripe-labels";
+  labels.innerHTML = `<span>${first.year}</span><span>each stripe is one year: <i class="below"></i> below usual <i class="above"></i> above usual</span><span>${last.year}</span>`;
+  container.append(band, labels);
 }

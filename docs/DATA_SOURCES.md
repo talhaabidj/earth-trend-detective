@@ -54,6 +54,12 @@ OpenStreetMap standard tiles, © OpenStreetMap contributors, data under the Open
 
 - GitHub (code hosting, Actions for tests), Vercel Hobby plan (static hosting). Free tiers.
 
+## Design ideas
+
+The band of year stripes on each result is inspired by Ed Hawkins's "warming stripes"
+(https://showyourstripes.info, University of Reading, CC BY 4.0). Ours are drawn by our own code
+from each place's NASA data; no image or code from that site is used.
+
 ## Text, images and fonts
 
 - No images, icons or fonts from third parties. Text uses the visitor's system font.

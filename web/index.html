@@ -27,8 +27,8 @@
   <a class="skip-link" href="#explore">Skip to the explorer</a>
   <noscript><p class="no-script">This tool needs JavaScript to get NASA data and test it. Please turn JavaScript on, or <a href="demo">watch the 30-second demo</a>.</p></noscript>
 
-  <div class="hero-band">
-    <header class="top-bar wrap">
+  <header class="top-bar" id="top-bar">
+    <div class="wrap top-bar-inner">
       <a class="brand" href="./" aria-label="Earth Trend Detective, home">
         <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#2a78d6"/><polyline points="5,23 11,19 16,21 21,13 27,9" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Earth Trend Detective</span>
@@ -43,12 +43,16 @@
       <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch between light and dark">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
       </button>
-    </header>
+    </div>
+  </header>
+
+  <div class="hero-band">
+    <div class="hero-sky" aria-hidden="true"></div>
 
     <section class="hero wrap" aria-labelledby="hero-title">
       <div class="hero-text">
         <p class="eyebrow">NASA Space Apps 2026 · Team Ludilume Studios</p>
-        <h1 id="hero-title">Is it really changing, or is it too soon to say?</h1>
+        <h1 id="hero-title">Is it really changing, or is it <span class="accent">too soon to say?</span></h1>
         <p class="lead">Pick any place on Earth and ask a question. 45 years of NASA data and two honest tests give you a verdict in plain words.</p>
         <div class="hero-actions">
           <a class="button primary" href="#explore" id="start-button">Open your own case</a>
@@ -61,28 +65,35 @@
     </section>
   </div>
 
-  <section class="steps wrap" aria-label="How it works in three steps">
+  <section class="steps wrap" aria-label="How it works in three steps" data-reveal="group">
     <div class="step-card"><span class="step-number">1</span><div><strong>Pick a place</strong><p>Search a city, click the map, or use where you are.</p></div></div>
     <div class="step-card"><span class="step-number">2</span><div><strong>Ask a question</strong><p>Hotter? Wetter? Less snow? 14 NASA variables, each explained in one line.</p></div></div>
     <div class="step-card"><span class="step-number">3</span><div><strong>Get an honest verdict</strong><p>Yes, maybe, not yet (and how long to wait), or no. Then see where else it is changing.</p></div></div>
   </section>
 
   <main class="wrap">
+    <section class="facts" aria-label="The tool in numbers" data-reveal="group">
+      <div class="fact"><strong><span data-count="45">45</span></strong><span>years of monthly NASA data, 1981–2025</span></div>
+      <div class="fact"><strong><span data-count="14">14</span></strong><span>questions, each explained in one line</span></div>
+      <div class="fact"><strong><span data-count="2">2</span></strong><span>tests that must agree before it says yes</span></div>
+      <div class="fact"><strong><span data-count="0">0</span></strong><span>sign-ups, ads or trackers</span></div>
+    </section>
+
     <section id="examples" class="section" aria-labelledby="examples-title">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <h2 id="examples-title">Cases already solved</h2>
         <p>Step-by-step examples with real NASA data. They open instantly, even when NASA's servers are busy.</p>
       </div>
-      <div id="story-list" class="story-list"></div>
+      <div id="story-list" class="story-list" data-reveal></div>
       <div id="story-player" class="story-player panel" hidden></div>
     </section>
 
     <section id="explore" class="section" aria-labelledby="explore-title">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <h2 id="explore-title">Open your own case</h2>
         <p>Choose a place and a question. The result appears beside your choices and updates when you change them.</p>
       </div>
-      <div class="workspace">
+      <div class="workspace" data-reveal>
         <div class="controls panel">
           <fieldset class="control-group">
             <legend><span class="step-number small">1</span> Where?</legend>
@@ -141,7 +152,7 @@
     </section>
 
     <section id="map-trends" class="section" aria-labelledby="map-title">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <h2 id="map-title">Where is it changing?</h2>
         <p>Test every grid cell around your place at once, for the question you chose above. Click a cell to open its case.</p>
       </div>
@@ -165,11 +176,11 @@
     </section>
 
     <section id="classroom" class="section" aria-labelledby="class-title">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <h2 id="class-title">Use it in class (15 minutes)</h2>
         <p>A short activity for school or college students. No sign-up, works on phones.</p>
       </div>
-      <ol class="class-steps">
+      <ol class="class-steps" data-reveal="group">
         <li><strong>Guess first.</strong> Ask: "Is our town getting hotter?" Write down the guesses.</li>
         <li><strong>Test it.</strong> Look up your town. Check the average, the daytime high and the night-time low. Do they agree?</li>
         <li><strong>Compare.</strong> Add a second place far away. Why might the answers differ?</li>
@@ -178,11 +189,11 @@
     </section>
 
     <section id="methods" class="section" aria-labelledby="methods-title">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <h2 id="methods-title">How the detective works</h2>
         <p>Every step can be checked. The code and the tests are open.</p>
       </div>
-      <div class="method-grid">
+      <div class="method-grid" data-reveal="group">
         <div class="panel prose">
           <ol>
             <li><strong>Data.</strong> Monthly values from <a href="https://power.larc.nasa.gov/">NASA POWER</a>, which serves the NASA MERRA-2 reanalysis and CERES satellite products, 1981–2025, for any point on Earth. A wider area is an average of grid cells weighted by their size. The greenness examples use the MODIS instrument on NASA's Terra satellite.</li>

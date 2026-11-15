@@ -80,7 +80,7 @@ export function describe(result, variable) {
     },
   }[result.verdict];
   if (special) {
-    return { ...special, status: CASE_STATUS[result.verdict], numbers: [], warnings: [], rate: NaN, low: NaN, high: NaN, hasTrend: false };
+    return { ...special, status: CASE_STATUS[result.verdict], tiles: [], numbers: [], warnings: [], rate: NaN, low: NaN, high: NaN, hasTrend: false };
   }
 
   const { rate, low, high, method } = decadeRate(result);
@@ -126,8 +126,22 @@ export function describe(result, variable) {
     },
   };
 
+  // Three key numbers shown large under the verdict.
+  const lastTile = {
+    clear: { label: `Change over ${yearsShown} years`, value: rate * result.years_of_data / 10, text: null },
+    mixed: { label: "Tests that agree", value: null, text: "1 of 2" },
+    not_yet: { label: "More data needed", value: null, text: `about ${moreYears} years` },
+    none: { label: "Tests that agree", value: null, text: "0 of 2" },
+  }[result.verdict];
+  const tiles = [
+    { label: "Rate per decade", value: rate, text: null },
+    { label: "95% range", value: null, text: `${signed(low, decimals)} to ${signed(high, decimals)}` },
+    lastTile,
+  ];
+
   return {
     ...verdicts[result.verdict],
+    tiles,
     status: CASE_STATUS[result.verdict],
     numbers: numbersBehind(result, rateText, rangeText, method, withUnits, decimals),
     warnings: result.warnings.map((w) => WARNING_TEXT[w]).filter(Boolean),
