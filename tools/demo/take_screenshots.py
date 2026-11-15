@@ -43,7 +43,10 @@ def main():
         page.wait_for_timeout(1500)
         page.screenshot(path=out / "01-home.png")
 
+        # The average, scrolled so the second opinion from the weather station is in view.
         open_story(page, 0, 1)
+        page.wait_for_selector("#story-player .second-opinion")
+        scroll_to(page, "#story-player .result")
         page.screenshot(path=out / "02a-jacobabad-average.png")
         open_story(page, 0, 2)
         page.screenshot(path=out / "02-jacobabad-day-night.png")

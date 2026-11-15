@@ -2,8 +2,9 @@
 match the spoken words. Each spoken line has one or more pictures; the video must stay under 30 s.
 
 Needs: screenshots from take_screenshots.py, the voice clips from use_recording.py, Playwright
-(to draw the title cards) and ffmpeg.
-Usage: python tools/demo/make_video.py SCREENSHOT_FOLDER VOICE_FOLDER OUTPUT.mp4
+(to draw the title cards) and ffmpeg. With a clips folder from record_scenes.py, a line that has a
+recorded clip (scene-<line number>.mp4) shows that clip instead of its still pictures.
+Usage: python tools/demo/make_video.py SCREENSHOT_FOLDER VOICE_FOLDER OUTPUT.mp4 [CLIPS_FOLDER]
 """
 
 import json
@@ -70,16 +71,19 @@ def draw_cards(folder):
         browser.close()
 
 
-def plan_scenes(voice_folder):
+def plan_scenes(voice_folder, clips_folder=None):
     """Lines: the words, the voice clip and when it is spoken.
-    Shots: the picture, its crop, when it starts and how long it stays (with the fade)."""
+    Shots: the picture or recorded clip, its crop, when it starts and how long it stays (with the fade)."""
     clips = json.loads((voice_folder / "lines.json").read_text())["clips"]
     if len(clips) != len(SCENES_IN_ORDER):
         raise SystemExit("The voice folder and make_video.py must have the same number of scenes")
     lines, shots, start = [], [], 0.0
-    for pictures, clip in zip(SCENES_IN_ORDER, clips):
+    for number, (pictures, clip) in enumerate(zip(SCENES_IN_ORDER, clips), start=1):
         visible = max(clip["seconds"] + PAUSE, MIN_SCENE)
         lines.append({"text": clip["text"], "voice": voice_folder / clip["file"], "start": start, "end": start + visible})
+        recorded = clips_folder / f"scene-{number}.mp4" if clips_folder else None
+        if recorded and recorded.exists():
+            pictures = [(recorded, None, 1)]
         shot_start = start
         for image, crop, share in pictures:
             shots.append({"image": image, "crop": crop, "start": shot_start, "seconds": visible * share + FADE})
@@ -109,8 +113,15 @@ def write_subtitles(path, spoken_lines):
     path.write_text("\n".join(lines) + "\n")
 
 
+def is_clip(shot):
+    return str(shot["image"]).endswith(".mp4")
+
+
 def shot_filter(shot):
-    """The ffmpeg filter that turns one picture into a 1920x1080 clip."""
+    """The ffmpeg filter that turns one picture or recorded clip into a 1920x1080 clip."""
+    if is_clip(shot):
+        return (f"fps=30,scale=1920:1080:flags=lanczos,trim=duration={shot['seconds']:.2f},"
+                "setpts=PTS-STARTPTS,setsar=1,format=yuv420p")
     crop = ""
     if shot["crop"]:
         x, y, width = shot["crop"]
@@ -128,7 +139,9 @@ def build_video(spoken_lines, shots, length, shot_folder, cards, subtitles, outp
     inputs, filters = [], []
     for i, shot in enumerate(shots):
         image = shot["image"]
-        if image.startswith("card-") or ZOOM == 0:
+        if is_clip(shot):
+            inputs += ["-i", str(image)]
+        elif image.startswith("card-") or ZOOM == 0:
             file = (cards / f"{image}.png") if image.startswith("card-") else (shot_folder / image)
             inputs += ["-loop", "1", "-t", f"{shot['seconds']:.2f}", "-i", str(file)]
         else:
@@ -168,7 +181,8 @@ def build_video(spoken_lines, shots, length, shot_folder, cards, subtitles, outp
 
 def main():
     shot_folder, voice_folder, output = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-    spoken_lines, shots, length = plan_scenes(voice_folder)
+    clips_folder = Path(sys.argv[4]) if len(sys.argv) > 4 else None
+    spoken_lines, shots, length = plan_scenes(voice_folder, clips_folder)
     with tempfile.TemporaryDirectory() as temp:
         temp = Path(temp)
         draw_cards(temp)
