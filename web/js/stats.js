@@ -197,6 +197,9 @@ function lineTest(times, anomalyValues) {
   const points = [];
   times.forEach((t, i) => { if (!Number.isNaN(anomalyValues[i])) points.push([t, anomalyValues[i]]); });
   const count = points.length;
+  if (count < 3) {
+    return { slope: NaN, intercept: NaN, low: NaN, high: NaN, p: NaN, autocorrelation: 0, effectiveMonths: 0, noiseSd: NaN };
+  }
   const meanT = points.reduce((sum, [t]) => sum + t, 0) / count;
   const meanV = points.reduce((sum, [, v]) => sum + v, 0) / count;
   const spreadT = points.reduce((sum, [t]) => sum + (t - meanT) ** 2, 0);
@@ -213,7 +216,7 @@ function lineTest(times, anomalyValues) {
   let p = NaN;
   let low = NaN;
   let high = NaN;
-  if (effectiveMonths > 3) {
+  if (effectiveMonths > 3 && noiseSd > 0) {
     const degrees = effectiveMonths - 2;
     const standardError = noiseSd / Math.sqrt(spreadT) * Math.sqrt((count - 2) / degrees);
     p = tTwoSidedP(slope / standardError, degrees);
@@ -230,7 +233,9 @@ function lineTest(times, anomalyValues) {
 function yearsNeeded(noiseSd, slopePerYear, autocorrelation) {
   if (!slopePerYear || Number.isNaN(slopePerYear)) return Infinity;
   const r = Math.min(Math.max(autocorrelation, 0), 0.99);
-  return ((3.3 * noiseSd / Math.abs(slopePerYear)) * Math.sqrt((1 + r) / (1 - r))) ** (2 / 3);
+  const years = ((3.3 * noiseSd / Math.abs(slopePerYear)) * Math.sqrt((1 + r) / (1 - r))) ** (2 / 3);
+  // Beyond 10,000 years the slope is zero for all practical purposes.
+  return years <= 10000 ? years : Infinity;
 }
 
 function pickVerdict(mkP, lineP, yearsOfData, shareValid, moreYears) {
@@ -245,6 +250,22 @@ function pickVerdict(mkP, lineP, yearsOfData, shareValid, moreYears) {
 
 // --- Putting it together --------------------------------------------------------------------
 
+// The result when no test can be run. Every statistic is NaN.
+function specialResult(rows, validMonths, shareValid, verdict) {
+  const nan = NaN;
+  return {
+    months: rows.length, valid_months: validMonths,
+    first_year: rows[0].year, last_year: rows[rows.length - 1].year,
+    years_of_data: rows.length / 12, share_valid: shareValid,
+    mk_score: nan, mk_z: nan, mk_p: nan,
+    sen_slope: nan, sen_low: nan, sen_high: nan,
+    line_slope: nan, line_low: nan, line_high: nan, line_p: nan,
+    autocorrelation: nan, effective_months: nan, noise_sd: nan,
+    years_needed: nan, more_years_needed: nan,
+    verdict, warnings: [],
+  };
+}
+
 export function analyse(rows) {
   rows = rows.map((r) => ({ ...r, value: isMissing(r.value) ? NaN : r.value }));
   const months = rows.length;
@@ -252,10 +273,20 @@ export function analyse(rows) {
   const yearsOfData = months / 12;
   const shareValid = months ? validMonths / months : 0;
 
-  const mk = seasonalMannKendall(rows);
-  const sen = seasonalSenSlope(rows, mk.variance);
   const usual = usualMonthValues(rows);
   const anomalyValues = anomalies(rows, usual);
+  const validValues = rows.map((r) => r.value).filter((v) => !Number.isNaN(v));
+
+  // No data at all, or a value that never changes: no trend test makes sense.
+  let special = null;
+  if (!validValues.length) special = "no_data";
+  else if (Math.max(...validValues) === Math.min(...validValues)) special = "constant";
+  if (special) {
+    return { result: specialResult(rows, validMonths, shareValid, special), usual, anomalies: anomalyValues };
+  }
+
+  const mk = seasonalMannKendall(rows);
+  const sen = seasonalSenSlope(rows, mk.variance);
   const times = rows.map((r) => r.year + (r.month - 0.5) / 12);
   const line = lineTest(times, anomalyValues);
 
@@ -268,6 +299,7 @@ export function analyse(rows) {
   if (shareValid < MIN_SHARE_VALID) warnings.push("many_missing");
   if (line.autocorrelation > 0.5) warnings.push("strong_memory");
   if (sen.slope === 0 && line.slope !== 0) warnings.push("median_slope_zero");
+  if (2 * validValues.filter((v) => v === 0).length > validValues.length) warnings.push("mostly_zero");
 
   const result = {
     months,
@@ -294,5 +326,7 @@ export function analyse(rows) {
     verdict: pickVerdict(mk.p, line.p, yearsOfData, shareValid, moreYears),
     warnings,
   };
+  // With mostly zeros the tests rest on a few months, so the answer is at best "maybe".
+  if (warnings.includes("mostly_zero") && result.verdict === "clear") result.verdict = "mixed";
   return { result, usual, anomalies: anomalyValues };
 }

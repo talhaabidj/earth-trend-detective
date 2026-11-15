@@ -25,11 +25,13 @@ export function passesFalseDiscoveryCheck(pValues, rate = 0.05) {
 
 // Decide each cell's class: clear rise/fall (both tests pass the check), maybe, or no clear trend.
 function classifyCells(cells) {
-  const mkPasses = passesFalseDiscoveryCheck(cells.map((c) => c.result.mk_p));
-  const linePasses = passesFalseDiscoveryCheck(cells.map((c) => (Number.isFinite(c.result.line_p) ? c.result.line_p : 1)));
+  // A cell with no usable test counts as p = 1 (never significant).
+  const usable = (p) => (Number.isFinite(p) ? p : 1);
+  const mkPasses = passesFalseDiscoveryCheck(cells.map((c) => usable(c.result.mk_p)));
+  const linePasses = passesFalseDiscoveryCheck(cells.map((c) => usable(c.result.line_p)));
   cells.forEach((cell, i) => {
     const rising = cell.rate > 0;
-    if (cell.result.verdict === "too_short") cell.kind = "no_data";
+    if (!Number.isFinite(cell.rate) || cell.result.verdict === "too_short") cell.kind = "no_data";
     else if (mkPasses[i] && linePasses[i]) cell.kind = rising ? "clear_rise" : "clear_fall";
     else if (mkPasses[i] || linePasses[i]) cell.kind = rising ? "maybe_rise" : "maybe_fall";
     else cell.kind = "no_trend";
@@ -77,9 +79,11 @@ function summaryText(cells, variable) {
   const rises = count("clear_rise");
   const falls = count("clear_fall");
   const maybes = count("maybe_rise") + count("maybe_fall");
-  const none = count("no_trend") + count("no_data");
+  const none = count("no_trend");
+  const noData = count("no_data");
   let text = `Of ${cells.length} grid cells, ${rises} show a clear rise in ${variable.name.toLowerCase()}, ` +
     `${falls} a clear fall, ${maybes} a "maybe", and ${none} no clear trend.`;
+  if (noData) text += ` ${noData} have no usable data (for example open ocean for a land variable).`;
   if (rises && falls) text += " The same variable is moving in opposite directions within this area.";
   return text;
 }
@@ -95,14 +99,16 @@ export async function mapTrends(map, layerGroup, variable, box, onCellClick) {
   classifyCells(cells);
   // The colour scale runs up to the fastest clear trend (or the fastest of any, if none is clear).
   const clearCells = cells.filter((c) => c.kind.startsWith("clear"));
-  const biggestRate = Math.max(...(clearCells.length ? clearCells : cells).map((c) => Math.abs(c.rate)), 1e-9);
+  const rates = (clearCells.length ? clearCells : cells).map((c) => Math.abs(c.rate)).filter(Number.isFinite);
+  const biggestRate = Math.max(...rates, 1e-9);
 
   layerGroup.clearLayers();
   for (const cell of cells) {
     const bounds = [[cell.lat - HALF_CELL.lat, cell.lon - HALF_CELL.lon], [cell.lat + HALF_CELL.lat, cell.lon + HALF_CELL.lon]];
     const rectangle = L.rectangle(bounds, { stroke: true, color: "#ffffff", weight: 0.5, fillColor: cellColour(cell, biggestRate), fillOpacity: 0.78 });
     const units = variable.units ? ` ${variable.units}` : "";
-    rectangle.bindTooltip(`${cell.lat.toFixed(2)}°, ${cell.lon.toFixed(2)}°<br>${signed(cell.rate, variable.decimals)}${units} per decade<br>${KIND_TEXT[cell.kind]}`);
+    const rateLine = Number.isFinite(cell.rate) ? `${signed(cell.rate, variable.decimals)}${units} per decade<br>` : "";
+    rectangle.bindTooltip(`${cell.lat.toFixed(2)}°, ${cell.lon.toFixed(2)}°<br>${rateLine}${KIND_TEXT[cell.kind]}`);
     rectangle.on("click", () => onCellClick(cell.lat, cell.lon));
     layerGroup.addLayer(rectangle);
   }

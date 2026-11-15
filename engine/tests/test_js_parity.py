@@ -30,11 +30,38 @@ def test_browser_engine_matches_python(trend, noise, seed, with_gaps):
             rows[i] = (rows[i][0], rows[i][1], None)
     python_result, _, _ = stats.analyse(rows)
     browser_result = run_in_node(rows)
+    assert_same(python_result, browser_result)
+
+
+def assert_same(python_result, browser_result):
     for key, expected in python_result.items():
-        if isinstance(expected, float):
+        if isinstance(expected, float) and not math.isfinite(expected):
+            assert browser_result[key] is None, key  # NaN and infinity become null in JSON
+        elif isinstance(expected, float):
             assert browser_result[key] == pytest.approx(expected, rel=1e-6, abs=1e-9), key
         else:
             assert browser_result[key] == expected, key
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+@pytest.mark.parametrize("case", ["no_data", "constant", "mostly_zero", "few_points"])
+def test_browser_engine_matches_python_on_odd_data(case):
+    rows = make_series(years=20)
+    if case == "no_data":
+        rows = [(y, m, None) for y, m, _ in rows]
+    elif case == "constant":
+        rows = [(y, m, 1.0) for y, m, _ in rows]
+    elif case == "mostly_zero":
+        rows = [(y, m, 2.0 if (m == 1 and y % 3 == 0) else 0.0) for y, m, _ in rows]
+    elif case == "few_points":
+        rows = [(y, m, v if y == 1990 and m <= 2 else None) for y, m, v in rows]
+    python_result, _, _ = stats.analyse(rows)
+    assert_same(python_result, run_in_node(rows))
+    expected_verdict = {"no_data": "no_data", "constant": "constant", "few_points": "too_short"}.get(case)
+    if expected_verdict:
+        assert python_result["verdict"] == expected_verdict
+    if case == "mostly_zero":
+        assert "mostly_zero" in python_result["warnings"]
 
 
 def test_false_discovery_check_worked_example():

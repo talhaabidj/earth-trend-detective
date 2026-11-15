@@ -55,6 +55,11 @@ to match, and test with a t distribution on n_eff − 2 degrees of freedom.
 | No detectable trend | neither test, and 50 or more years would be needed |
 | Not enough data | under 10 years, or under 70% of months present |
 
+Three cases get a plain message and no trend verdict: no data at all for the place; a value that
+never changes (for example soil wetness over open ocean is always 1); and too little data. When a
+value is zero in most months (snow depth in a desert, frost days in a warm place), the tests rest on
+a few months, so the verdict is capped at "maybe" and a warning is shown.
+
 The rate shown is the Sen slope. When many values repeat (rounded or zero-heavy data such as desert
 rain), the Sen slope can be exactly 0 even with a real trend; then we show the least-squares slope
 and say so.
@@ -94,6 +99,8 @@ All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push 
 - A synthetic series with a known trend of 0.05 per year is recovered within its 95% intervals.
 - Pure noise gives no significant trend.
 - Short records are refused; gaps stay gaps.
+- No data, constant values and mostly-zero values give the special results described above, the
+  same in Python and in the browser.
 - Years-to-detect grows with noise and autocorrelation.
 - POWER's month 13 and -999 values are removed; the area average uses cos(latitude).
 - The browser copy (`web/js/stats.js`) gives the same numbers as the Python engine on three test

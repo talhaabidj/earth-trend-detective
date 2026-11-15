@@ -3,6 +3,7 @@
 
 const POWER_URL = "https://power.larc.nasa.gov/api/temporal/monthly";
 const MISSING = -999;
+const WAIT_SECONDS = 45;
 export const LAST_YEAR = 2025;
 
 function pointUrl(variable, place, firstYear) {
@@ -51,8 +52,23 @@ function areaAverage(cells, variable) {
   });
 }
 
+// Answers already downloaded in this visit, so going back to a place is instant.
+const downloaded = new Map();
+
 async function downloadJson(url) {
-  const response = await fetch(url);
+  if (downloaded.has(url)) return downloaded.get(url);
+  const timer = new AbortController();
+  const timeout = setTimeout(() => timer.abort(), WAIT_SECONDS * 1000);
+  let response;
+  try {
+    response = await fetch(url, { signal: timer.signal });
+  } catch (error) {
+    if (!navigator.onLine) throw new Error("You seem to be offline.");
+    if (error.name === "AbortError") throw new Error(`NASA's data service did not answer within ${WAIT_SECONDS} seconds.`);
+    throw new Error("NASA's data service could not be reached.");
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) {
     let reason = "";
     try {
@@ -60,9 +76,12 @@ async function downloadJson(url) {
     } catch {
       // The error page was not JSON; the status code is enough.
     }
-    throw new Error(`NASA POWER answered ${response.status}. ${reason}`.trim());
+    if (response.status === 429) throw new Error("NASA's data service is busy (too many requests).");
+    throw new Error(`NASA's data service answered with an error (${response.status}). ${reason}`.trim());
   }
-  return response.json();
+  const data = await response.json();
+  downloaded.set(url, data);
+  return data;
 }
 
 // Every grid cell in a box, each with its own rows: [{lat, lon, rows}]. Used by the trend map.
@@ -78,14 +97,22 @@ export async function getAreaCells(variable, box, firstYear) {
 }
 
 // A square box around a point, `size` degrees wide (POWER allows 2 to 10 degrees).
+// Near the poles or the date line the box slides inward, so it keeps its full size.
 export function boxOfSize(lat, lon, size) {
   const half = size / 2;
+  const middleLat = Math.min(Math.max(lat, -90 + half), 90 - half);
+  const middleLon = Math.min(Math.max(lon, -180 + half), 180 - half);
   return {
-    south: Math.max(-89.5, lat - half),
-    north: Math.min(89.5, lat + half),
-    west: Math.max(-179.9, lon - half),
-    east: Math.min(179.9, lon + half),
+    south: middleLat - half,
+    north: middleLat + half,
+    west: middleLon - half,
+    east: middleLon + half,
   };
+}
+
+// The 2° x 2° "wider area" box (POWER needs at least 2° each way).
+export function boxAround(lat, lon) {
+  return boxOfSize(lat, lon, 2);
 }
 
 // place is {lat, lon} for one grid cell, or {box: {south, north, west, east}} for an area.
@@ -98,9 +125,4 @@ export async function getMonthlyData(variable, place, firstYear) {
   const url = pointUrl(variable, place, firstYear);
   const data = await downloadJson(url);
   return { rows: toRows(data.properties.parameter[variable]), url, cells: 1 };
-}
-
-// The 2° x 2° "wider area" box (POWER needs at least 2° each way).
-export function boxAround(lat, lon) {
-  return boxOfSize(lat, lon, 2);
 }

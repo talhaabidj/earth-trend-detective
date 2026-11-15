@@ -40,6 +40,11 @@ Explorer (partner resource), which we looked at as an existing tool.
 
 The web page has no other dependencies and no build step. Charts are our own SVG code.
 
+## Place search
+
+Open-Meteo Geocoding API (https://open-meteo.com/en/docs/geocoding-api), free for non-commercial
+use, no key. Place names come from GeoNames (CC BY 4.0). Only the typed place name is sent.
+
 ## Map tiles
 
 OpenStreetMap standard tiles, © OpenStreetMap contributors, data under the Open Database License

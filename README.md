@@ -8,11 +8,12 @@ removes the seasons, runs two statistical tests, and answers in plain words: **y
 A map then shows *where* around that place the same variable is rising, falling or not changing.
 
 - **Live site:** https://earth-trend-detective.vercel.app (free, no login, works on phones)
+- **Demo video (29 s):** https://earth-trend-detective.vercel.app/demo
 - **Team:** Ludilume Studios: Talha Abid (Pakistan) and Kainat Ijaz (USA)
 - **Challenge:** NASA Space Apps 2026, "Be An Earth System Trend Detective!"
 - **Made during the event**, 14–15 November 2026. MIT licence.
 
-![A night-time temperature trend in Jacobabad next to a daytime one with no trend](docs/images/03-jacobabad-day-night.jpg)
+![The first screen: the question, one-click starter questions and a real result from NASA data](docs/images/01-home.jpg)
 
 ## Why we built it
 
@@ -26,13 +27,16 @@ does the statistics honestly and explains the answer, including when the honest 
 
 | Objective | How the tool meets it |
 |---|---|
-| Identify variables of interest | 14 NASA variables in four themes (heat, rain and water, air and sky, snow and cold), each with a one-line plain definition and why it matters. A "what kind of place is this?" helper suggests where to start for cities, deserts, mountains, farmland, rainforests and coasts. |
-| Get the data for a region | Click any point on Earth. Choose one grid cell (about 50 km) or a 2° × 2° area (cells averaged by size). For the map, every cell in a 6° or 10° box. |
-| Make and show a long time series | Monthly data from 1981 to 2025: the raw series, the usual seasonal cycle, and the series with seasons removed, with yearly averages. |
+| Identify variables of interest | 14 NASA variables in four themes (heat, rain and water, air and sky, snow and cold), each with a one-line plain definition and why it matters. One-click starter questions, and a "what kind of place is this?" helper that suggests where to start for cities, deserts, mountains, farmland, rainforests and coasts. |
+| Get the data for a region | Search a city, click the map, or use your own location, anywhere on Earth. Choose one grid cell (about 50 km) or a 2° × 2° area (cells averaged by size). For the map, every cell in a 6° or 10° box. |
+| Make and show a long time series | Monthly data from 1981 to 2025, in tabs: the series with seasons removed (with yearly averages and the trend), the raw series, the usual seasonal cycle, and a yearly table. |
 | Test the trend's rate and significance | Seasonal Mann-Kendall test with the Sen slope and a 95% range, and a straight-line test that allows for month-to-month memory. "Yes" only when both agree. If not significant, an estimate of how many more years would settle it. |
 
 It also includes **four step-by-step examples** (the challenge asks for demonstration examples)
-that load instantly, even if NASA's servers are busy.
+that load instantly, even if NASA's servers are busy, a **compare** box to put a second place next
+to the first, and a **15-minute classroom activity**.
+
+![The explorer: choices on the left, the verdict and charts on the right](docs/images/06-explorer.jpg)
 
 ## What the examples found
 
@@ -48,7 +52,8 @@ story's text does not match the data.
 
 | | |
 |---|---|
-| ![Hunza: not significant yet, about 30 more years needed](docs/images/05-hunza-not-yet.jpg) | ![Map of daytime high temperature trends around Lahore](docs/images/07-trend-map.jpg) |
+| ![Jacobabad: no trend in daytime highs, a clear rise in night-time lows](docs/images/02-jacobabad-day-night.jpg) | ![Hunza: not significant yet, about 30 more years needed](docs/images/04-hunza-not-yet.jpg) |
+| ![Map of daytime high temperature trends around Lahore](docs/images/07-trend-map.jpg) | ![MODIS greenness rising in central Lahore and the Thar desert](docs/images/05-greener-from-space.jpg) |
 
 ## Why you can trust the numbers
 
@@ -63,6 +68,9 @@ story's text does not match the data.
 - **Traps avoided:** POWER's extra "annual" month and missing-value codes are removed; missing
   months are never filled in; the sunlight and cloud variables start in 2001 so a change of
   satellite product cannot look like a trend.
+- **Odd data handled:** places with no data, values that never change (soil wetness over open
+  ocean) and values that are zero in most months (snow in a desert) get a plain message, not a
+  misleading verdict.
 - **Limits stated:** POWER is a model-based product at about 50 km, not a weather station; a
   straight-line trend is a summary; finding a change is not explaining its cause.
 
@@ -81,18 +89,15 @@ Science Division. All sources and licences: [docs/DATA_SOURCES.md](docs/DATA_SOU
 
 ## Use of SI
 
-As the NASA Space Apps rules require: Claude Code (Anthropic) wrote nearly all of the code and
-drafted the text, the written concept and a pre-event plan, under the team's direction. The demo
-video's English voice-over was generated with Kokoro-82M (open-weight text-to-speech), and the
-video was put together by scripts Claude wrote. No SI runs in the website, no data was generated
-by SI, and no SI-generated images or music are used.
+Claude Code (Anthropic) helped with the code, the documentation and rendering the demo video.
 
 Prior work: none reused ([docs/REUSED.md](docs/REUSED.md)).
 
 ## How it is built
 
 - `web/`: the website. Plain HTML, CSS and JavaScript, no build step. Our own SVG charts; Leaflet
-  for maps. Hosted on Vercel's free plan.
+  for maps; Open-Meteo's free geocoding for the place search. Light and dark themes, keyboard and
+  screen-reader support. Hosted on Vercel's free plan.
 - `web/js/stats.js`: the statistics, run in the visitor's browser.
 - `engine/`: the same statistics in Python, the tests, and scripts that build the examples.
 
@@ -116,5 +121,5 @@ cd engine && python -m scripts.build_examples
 
 ## What's next
 
-A classroom worksheet mode, more satellite variables (rainfall from GPM, air quality from OMI and
+A printable classroom worksheet, more satellite variables (rainfall from GPM, air quality from OMI and
 the ESA Sentinel-5P mission), and Urdu as a second language for students in Pakistan.

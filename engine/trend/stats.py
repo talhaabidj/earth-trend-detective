@@ -152,6 +152,10 @@ def line_fit(times, values):
 def line_test(times, anomaly_values):
     """Straight-line trend (units per year) tested with fewer 'effective' months when the data
     has month-to-month memory: effective = months x (1 - r) / (1 + r)."""
+    if sum(not math.isnan(v) for v in anomaly_values) < 3:
+        nan = math.nan
+        return {"slope": nan, "intercept": nan, "low": nan, "high": nan, "p": nan,
+                "autocorrelation": 0.0, "effective_months": 0.0, "noise_sd": nan}
     slope, intercept, points, spread_t = line_fit(times, anomaly_values)
     count = len(points)
     leftovers = [math.nan if math.isnan(v) else v - (intercept + slope * t) for t, v in zip(times, anomaly_values)]
@@ -161,7 +165,7 @@ def line_test(times, anomaly_values):
     noise_sd = math.sqrt(sum((v - (intercept + slope * t)) ** 2 for t, v in points) / (count - 2))
 
     p, low, high = math.nan, math.nan, math.nan
-    if effective_months > 3:
+    if effective_months > 3 and noise_sd > 0:
         degrees = effective_months - 2
         standard_error = noise_sd / math.sqrt(spread_t) * math.sqrt((count - 2) / degrees)
         p = float(2 * scipy_stats.t.sf(abs(slope / standard_error), degrees))
@@ -182,7 +186,9 @@ def years_needed(noise_sd, slope_per_year, autocorrelation):
     if slope_per_year == 0 or math.isnan(slope_per_year):
         return math.inf
     r = min(max(autocorrelation, 0.0), 0.99)
-    return ((3.3 * noise_sd / abs(slope_per_year)) * math.sqrt((1 + r) / (1 - r))) ** (2 / 3)
+    years = ((3.3 * noise_sd / abs(slope_per_year)) * math.sqrt((1 + r) / (1 - r))) ** (2 / 3)
+    # Beyond 10,000 years the slope is zero for all practical purposes.
+    return years if years <= 10000 else math.inf
 
 
 # --- Putting it together --------------------------------------------------------------------
@@ -201,6 +207,22 @@ def pick_verdict(mk_p, line_p, years_of_data, share_valid, more_years):
     return "none"
 
 
+def special_result(rows, valid_months, share_valid, verdict):
+    """The result when no test can be run. Every statistic is NaN."""
+    nan = math.nan
+    return {
+        "months": len(rows), "valid_months": valid_months,
+        "first_year": rows[0][0], "last_year": rows[-1][0],
+        "years_of_data": len(rows) / 12, "share_valid": share_valid,
+        "mk_score": nan, "mk_z": nan, "mk_p": nan,
+        "sen_slope": nan, "sen_low": nan, "sen_high": nan,
+        "line_slope": nan, "line_low": nan, "line_high": nan, "line_p": nan,
+        "autocorrelation": nan, "effective_months": nan, "noise_sd": nan,
+        "years_needed": nan, "more_years_needed": nan,
+        "verdict": verdict, "warnings": [],
+    }
+
+
 def analyse(rows):
     """Run both tests on (year, month, value) rows. Returns (result, usual month values, anomalies)."""
     rows = [(year, month, math.nan if value is None else float(value)) for year, month, value in rows]
@@ -209,10 +231,22 @@ def analyse(rows):
     years_of_data = months / 12
     share_valid = valid_months / months if months else 0.0
 
-    mk = seasonal_mann_kendall(rows)
-    sen = seasonal_sen_slope(rows, mk["variance"])
     usual = usual_month_values(rows)
     anomaly_values = anomalies(rows, usual)
+    valid_values = [value for _, _, value in rows if not math.isnan(value)]
+
+    # Two cases where a trend test makes no sense: no data at all, or a value that never changes
+    # (for example soil wetness over the ocean is always 1).
+    special = None
+    if not valid_values:
+        special = "no_data"
+    elif max(valid_values) == min(valid_values):
+        special = "constant"
+    if special:
+        return special_result(rows, valid_months, share_valid, special), usual, anomaly_values
+
+    mk = seasonal_mann_kendall(rows)
+    sen = seasonal_sen_slope(rows, mk["variance"])
     times = [year + (month - 0.5) / 12 for year, month, _ in rows]
     line = line_test(times, anomaly_values)
 
@@ -230,6 +264,8 @@ def analyse(rows):
         warnings.append("strong_memory")
     if sen["slope"] == 0 and line["slope"] != 0:
         warnings.append("median_slope_zero")
+    if 2 * sum(value == 0 for value in valid_values) > len(valid_values):
+        warnings.append("mostly_zero")
 
     result = {
         "months": months,
@@ -256,4 +292,7 @@ def analyse(rows):
         "verdict": pick_verdict(mk["p"], line["p"], years_of_data, share_valid, more_years),
         "warnings": warnings,
     }
+    # With mostly zeros the tests rest on a few months, so the answer is at best "maybe".
+    if "mostly_zero" in warnings and result["verdict"] == "clear":
+        result["verdict"] = "mixed"
     return result, usual, anomaly_values

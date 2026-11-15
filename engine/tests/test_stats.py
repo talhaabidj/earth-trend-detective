@@ -100,6 +100,14 @@ def test_rounded_data_still_gets_a_years_estimate():
     assert math.isfinite(result["years_needed"])
 
 
+def test_mostly_zero_data_is_never_a_clear_verdict():
+    # Zero in most months, with a few rising winter values (like frost days in a warm place).
+    rows = [(y, m, float(y - 1990) if m == 1 else 0.0) for y in range(1990, 2020) for m in range(1, 13)]
+    result, _, _ = stats.analyse(rows)
+    assert "mostly_zero" in result["warnings"]
+    assert result["verdict"] != "clear"
+
+
 def test_power_rows_drop_month_13_and_missing_values():
     raw = {"200001": 1.0, "200002": -999.0, "200013": 5.0, "200003": 2.0}
     assert to_rows(raw) == [(2000, 1, 1.0), (2000, 2, None), (2000, 3, 2.0)]

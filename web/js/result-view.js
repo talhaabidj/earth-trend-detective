@@ -1,35 +1,32 @@
-// Shows one analysis: verdict, charts and the numbers behind them.
-// Used by the explorer (app.js) and by the examples (stories.js).
+// Shows one analysis as a "case file": verdict first, then tabs with the charts, a table and the
+// numbers behind the verdict. Used by the explorer (app.js) and by the examples (stories.js).
 
 import { analyse } from "./stats.js";
 import { describe } from "./verdict.js";
 import { lineChart, monthBars } from "./charts.js";
 
-// Text from a link (like a place name) must never be read as HTML.
-function escapeHtml(text) {
+// Text from a link or a search (like a place name) must never be read as HTML.
+export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
 const monthLabel = (row) => `${row.year}-${String(row.month).padStart(2, "0")}`;
 const yearFraction = (row) => row.year + (row.month - 0.5) / 12;
+const monthName = (index) => new Date(2000, index, 1).toLocaleString("en", { month: "long" });
 
-// Yearly average of the anomalies, only for years with at least 9 of 12 months.
-function yearlyAverages(rows, anomalyValues) {
-  const years = new Map();
-  rows.forEach((row, i) => {
-    if (!Number.isFinite(anomalyValues[i])) return;
-    const entry = years.get(row.year) || { total: 0, count: 0 };
-    entry.total += anomalyValues[i];
-    entry.count += 1;
-    years.set(row.year, entry);
-  });
-  return [...years]
-    .filter(([, entry]) => entry.count >= 9)
-    .map(([year, entry]) => ({ x: year + 0.5, y: entry.total / entry.count, label: String(year) }));
+const ARROWS = {
+  rising: '<path d="M5 17 L17 5 M9 5 H17 V13"/>',
+  falling: '<path d="M5 5 L17 17 M9 17 H17 V9"/>',
+  flat: '<path d="M4 11 H18"/>',
+};
+
+function arrowIcon(direction) {
+  return `<svg viewBox="0 0 22 22" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" ` +
+    `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ARROWS[direction]}</svg>`;
 }
 
-// Year, yearly average and yearly anomaly (years with at least 9 months), as an HTML table.
-function yearlyTable(rows, anomalyValues, variable) {
+// Year totals of the values and the anomalies, only for years with at least 9 of 12 months.
+function yearlySummary(rows, anomalyValues) {
   const years = new Map();
   rows.forEach((row, i) => {
     if (row.value === null || !Number.isFinite(anomalyValues[i])) return;
@@ -39,106 +36,152 @@ function yearlyTable(rows, anomalyValues, variable) {
     entry.count += 1;
     years.set(row.year, entry);
   });
-  const units = variable.units ? ` (${variable.units})` : "";
-  const lines = [...years].filter(([, e]) => e.count >= 9).map(([year, e]) =>
-    `<tr><td>${year}</td><td>${(e.values / e.count).toFixed(variable.decimals)}</td><td>${(e.anomalies / e.count).toFixed(variable.decimals)}</td></tr>`);
-  return `<table class="data-table"><thead><tr><th>Year</th><th>Yearly average${units}</th><th>Difference from usual${units}</th></tr></thead><tbody>${lines.join("")}</tbody></table>`;
+  return [...years]
+    .filter(([, entry]) => entry.count >= 9)
+    .map(([year, entry]) => ({ year, average: entry.values / entry.count, anomaly: entry.anomalies / entry.count }));
 }
 
-function resultHtml(variable, label, result, text, cells, sourceUrl, compact, rows, anomalies) {
-  const warnings = [variable.caution, ...text.warnings].filter(Boolean);
-  const extraCharts = compact ? "" : `
-    <div class="chart-block">
-      <h5>Raw monthly values</h5>
-      <p>What the data looks like before the seasons are removed${variable.units ? ` (${variable.units})` : ""}.</p>
-      <div class="chart-box" data-chart="raw"></div>
-    </div>
-    <div class="chart-block">
-      <h5>The usual seasonal cycle</h5>
-      <p>The average for each calendar month. This is what gets removed above.</p>
-      <div class="chart-box" data-chart="months"></div>
-    </div>`;
-  return `
-    <div class="result-head">
-      <h3>${variable.name} · ${escapeHtml(label)}</h3>
-      <span class="muted">${result.first_year}–${result.last_year}, ${result.valid_months} months</span>
-    </div>
-    <div class="verdict ${text.tone}"><h4>${text.title}</h4><p>${text.body}</p></div>
-    ${result.verdict === "clear" || result.verdict === "mixed" ? `<p class="note">Testing many variables or places? About 1 test in 20 looks significant by chance, so check a finding against a second variable or the map of nearby places.</p>` : ""}
-    ${warnings.length ? `<ul class="warnings">${warnings.map((w) => `<li>${w}</li>`).join("")}</ul>` : ""}
-    <div class="chart-block">
-      <h5>Seasons removed: is there a trend?</h5>
-      <p>Each month minus its usual value for that time of year${variable.units ? ` (${variable.units})` : ""}. Orange line: the trend. Shaded: its 95% range.</p>
+function yearlyTable(yearly, variable) {
+  const units = variable.units ? ` (${variable.units})` : "";
+  const lines = yearly.map((y) =>
+    `<tr><td>${y.year}</td><td>${y.average.toFixed(variable.decimals)}</td><td>${y.anomaly.toFixed(variable.decimals)}</td></tr>`);
+  return `<div class="table-scroll" tabindex="0"><table class="data-table">
+    <thead><tr><th>Year</th><th>Yearly average${units}</th><th>Difference from usual${units}</th></tr></thead>
+    <tbody>${lines.join("")}</tbody></table></div>`;
+}
+
+const TABS = [
+  { id: "trend", label: "Trend" },
+  { id: "raw", label: "Raw data" },
+  { id: "seasons", label: "Seasons" },
+  { id: "table", label: "Table" },
+  { id: "numbers", label: "The numbers" },
+];
+
+function panelHtml(tab, variable, text, yearly) {
+  const units = variable.units ? ` (${variable.units})` : "";
+  if (tab === "trend") {
+    return `<p class="panel-note">Each month minus its usual value for that time of year${units}. This removes the seasons, so only real change is left.</p>
       <div class="legend">
         <span><i style="background:var(--series-faint)"></i>each month</span>
         <span><i style="background:var(--series-1)"></i>yearly average</span>
-        <span><i style="background:var(--trend)"></i>trend</span>
+        <span><i style="background:var(--trend)"></i>trend, with its 95% range shaded</span>
       </div>
-      <div class="chart-box" data-chart="anomalies"></div>
-    </div>
-    ${extraCharts}
-    <details>
-      <summary>Show the yearly values as a table</summary>
-      <div class="table-scroll">${yearlyTable(rows, anomalies, variable)}</div>
-    </details>
-    <details>
-      <summary>The numbers behind the verdict</summary>
-      <ul>${text.numbers.map((n) => `<li>${n}</li>`).join("")}</ul>
-    </details>
-    <p class="source">Data: ${variable.source}${cells > 1 ? `; average of ${cells} grid cells` : ""}.
-      <a href="${sourceUrl}" target="_blank" rel="noopener">See the exact data request</a>.</p>`;
+      <div class="chart-box" data-chart="trend"></div>`;
+  }
+  if (tab === "raw") {
+    return `<p class="panel-note">The monthly values as NASA provides them${units}, before the seasons are removed.</p>
+      <div class="chart-box" data-chart="raw"></div>`;
+  }
+  if (tab === "seasons") {
+    return `<p class="panel-note">The usual value for each calendar month${units}. This seasonal cycle is what gets removed before testing.</p>
+      <div class="chart-box" data-chart="seasons"></div>`;
+  }
+  if (tab === "table") {
+    return `<p class="panel-note">Yearly averages, for years with at least 9 months of data.</p>${yearlyTable(yearly, variable)}`;
+  }
+  return `<ul class="numbers">${text.numbers.map((n) => `<li>${n}</li>`).join("")}</ul>
+    <p class="panel-note">A p-value is the chance of seeing a trend this strong if nothing were really changing. Below 0.05 counts as significant.</p>`;
 }
 
-export function showResult(container, { rows, variable, label, sourceUrl, cells = 1, compact = false }) {
+let resultCount = 0;
+
+export function showResult(container, { rows, variable, label, sourceUrl, cells = 1 }) {
   const { result, usual, anomalies } = analyse(rows);
   const text = describe(result, variable);
+  const id = `result-${++resultCount}`;
+  const warnings = text.hasTrend ? [variable.caution, ...text.warnings].filter(Boolean) : [];
+  const years = result.valid_months ? `${result.first_year}–${result.last_year} · ${result.valid_months} months of data` : "no data";
 
-  const block = document.createElement("div");
+  const block = document.createElement("article");
   block.className = "result";
-  block.innerHTML = resultHtml(variable, label, result, text, cells, sourceUrl, compact, rows, anomalies);
+  block.innerHTML = `
+    <header class="result-head">
+      <p class="result-kicker">${variable.name} · ${years}</p>
+      <h3>${escapeHtml(label)}</h3>
+    </header>
+    <div class="verdict ${text.tone}">
+      <div class="verdict-icon">${arrowIcon(text.direction)}</div>
+      <div>
+        <p class="case-status">${text.status}</p>
+        <h4>${text.title}</h4>
+        <p>${text.body}</p>
+      </div>
+    </div>
+    ${warnings.length ? `<ul class="warnings">${warnings.map((w) => `<li>${w}</li>`).join("")}</ul>` : ""}
+    ${text.hasTrend ? `
+    <div class="result-tabs" role="tablist" aria-label="Views of this result">
+      ${TABS.map((tab, i) => `<button type="button" role="tab" id="${id}-${tab.id}" data-tab="${tab.id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${tab.label}</button>`).join("")}
+    </div>
+    <div class="result-panel" role="tabpanel" tabindex="0"></div>` : ""}
+    <p class="source">Data: ${variable.source}${cells > 1 ? `; average of ${cells} grid cells` : ""}.
+      <a href="${sourceUrl}" target="_blank" rel="noopener">See the exact data request</a></p>`;
   container.appendChild(block);
+  if (!text.hasTrend) return { block, result };
 
-  const anomalyPoints = rows.map((row, i) => ({
-    x: yearFraction(row), y: Number.isFinite(anomalies[i]) ? anomalies[i] : null, label: monthLabel(row),
-  }));
-  const rawPoints = rows.map((row) => ({ x: yearFraction(row), y: row.value, label: monthLabel(row) }));
-  const yearly = yearlyAverages(rows, anomalies);
-
+  const yearly = yearlySummary(rows, anomalies);
   const where = `${variable.name} at ${label}, ${result.first_year} to ${result.last_year}`;
   const valid = rows.filter((r) => r.value !== null).map((r) => r.value);
-  const highestMonth = usual.indexOf(Math.max(...usual));
-  const lowestMonth = usual.indexOf(Math.min(...usual));
-  const monthName = (i) => new Date(2000, i, 1).toLocaleString("en", { month: "long" });
-  const descriptions = {
-    anomalies: `Line chart of monthly differences from usual for ${where}, with yearly averages and a trend line. ${text.title}.`,
-    raw: `Line chart of monthly values for ${where}, from ${Math.min(...valid).toFixed(variable.decimals)} to ${Math.max(...valid).toFixed(variable.decimals)}.`,
-    months: `Bar chart of the usual value for each month: highest in ${monthName(highestMonth)}, lowest in ${monthName(lowestMonth)}.`,
+  const panel = block.querySelector(".result-panel");
+  let openTab = "trend";
+
+  const charts = {
+    trend: (box) => lineChart(box, {
+      points: rows.map((row, i) => ({ x: yearFraction(row), y: Number.isFinite(anomalies[i]) ? anomalies[i] : null, label: monthLabel(row) })),
+      yearly: yearly.map((y) => ({ x: y.year + 0.5, y: y.anomaly, label: String(y.year) })),
+      trend: { slope: text.rate / 10, low: text.low / 10, high: text.high / 10 },
+      units: variable.units, decimals: variable.decimals, zeroLine: true, height: 260,
+      description: `Line chart of monthly differences from usual for ${where}, with yearly averages and a trend line. ${text.title}.`,
+    }),
+    raw: (box) => lineChart(box, {
+      points: rows.map((row) => ({ x: yearFraction(row), y: row.value, label: monthLabel(row) })),
+      units: variable.units, decimals: variable.decimals, height: 260,
+      description: `Line chart of monthly values for ${where}, from ${Math.min(...valid).toFixed(variable.decimals)} to ${Math.max(...valid).toFixed(variable.decimals)}.`,
+    }),
+    seasons: (box) => monthBars(box, {
+      usual, units: variable.units, decimals: variable.decimals, height: 240,
+      description: `Bar chart of the usual value for each month: highest in ${monthName(usual.indexOf(Math.max(...usual)))}, lowest in ${monthName(usual.indexOf(Math.min(...usual)))}.`,
+    }),
   };
 
-  function drawCharts() {
-    lineChart(block.querySelector('[data-chart="anomalies"]'), {
-      points: anomalyPoints, units: variable.units, decimals: variable.decimals, zeroLine: true, yearly,
-      trend: { slope: text.rate / 10, low: text.low / 10, high: text.high / 10 }, description: descriptions.anomalies,
-    });
-    if (compact) return;
-    lineChart(block.querySelector('[data-chart="raw"]'), {
-      points: rawPoints, units: variable.units, decimals: variable.decimals, height: 200, description: descriptions.raw,
-    });
-    monthBars(block.querySelector('[data-chart="months"]'), {
-      usual, units: variable.units, decimals: variable.decimals, description: descriptions.months,
-    });
+  function draw() {
+    const box = panel.querySelector("[data-chart]");
+    if (box) charts[box.dataset.chart](box);
   }
-  drawCharts();
+
+  function open(tab) {
+    openTab = tab;
+    for (const button of block.querySelectorAll('[role="tab"]')) {
+      const selected = button.dataset.tab === tab;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+    panel.setAttribute("aria-labelledby", `${id}-${tab}`);
+    panel.innerHTML = panelHtml(tab, variable, text, yearly);
+    draw();
+  }
+
+  const tabButtons = [...block.querySelectorAll('[role="tab"]')];
+  tabButtons.forEach((button, index) => {
+    button.addEventListener("click", () => open(button.dataset.tab));
+    button.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const step = event.key === "ArrowRight" ? 1 : -1;
+      const next = tabButtons[(index + step + tabButtons.length) % tabButtons.length];
+      next.focus();
+      open(next.dataset.tab);
+    });
+  });
+  open(openTab);
+
   // Redraw when the width changes; stop watching once the block is removed from the page.
   let lastWidth = block.clientWidth;
   const watcher = new ResizeObserver(() => {
     if (!block.isConnected) {
       watcher.disconnect();
-      return;
-    }
-    if (block.clientWidth !== lastWidth) {
+    } else if (block.clientWidth !== lastWidth) {
       lastWidth = block.clientWidth;
-      drawCharts();
+      draw();
     }
   });
   watcher.observe(block);

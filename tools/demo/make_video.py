@@ -23,12 +23,12 @@ MAX_LENGTH = 29.5  # the rules allow 30 seconds; keep a margin
 # matters, so the text can be read on a small screen; the height follows from 16:9.
 SCENES_IN_ORDER = [
     ("card-team", None),
-    ("card-name", None),
-    ("09-explorer-start.png", (200, 40, 1500)),
-    ("03-jacobabad-day-night.png", (230, 240, 1460)),
-    ("05-hunza-not-yet.png", (230, 255, 1460)),
-    ("07-trend-map.png", (200, 100, 1520)),
-    ("06-greener-from-space.png", (230, 250, 1460)),
+    ("01-home.png", None),
+    ("06-explorer.png", (96, 0, 1728)),
+    ("02-jacobabad-day-night.png", (120, 270, 1680)),
+    ("04-hunza-not-yet.png", (120, 280, 1680)),
+    ("07-trend-map.png", (110, 20, 1700)),
+    ("05-greener-from-space.png", (120, 270, 1680)),
     ("card-future", None),
 ]
 
@@ -42,21 +42,16 @@ CARD_STYLE = """
   p { font-size: 34px; margin: 0 0 14px; color: #2b2b29; line-height: 1.3; }
   .url { color: #1c5cab; font-weight: 700; }
   .bar { width: 120px; height: 8px; background: #2a78d6; border-radius: 4px; margin-bottom: 34px; }
-  .note { position: absolute; top: 28px; right: 56px; margin: 0; font-size: 22px; color: #3d3c39; }
 </style>
 """
 
-VOICE_NOTE = '<p class="note">Voice-over generated with SI (Kokoro text-to-speech).</p>'
-
 CARDS = {
-    "card-team": f"""<div class="bar"></div><p class="small">NASA Space Apps Challenge 2026</p>
+    "card-team": """<div class="bar"></div><p class="small">NASA Space Apps Challenge 2026</p>
         <h1>Ludilume Studios</h1><p>Talha Abid · Kainat Ijaz</p>
-        <p class="small">Challenge: Be An Earth System Trend Detective!</p>{VOICE_NOTE}""",
-    "card-name": """<div class="bar"></div><h1>Earth Trend Detective</h1>
-        <p>Is it really changing, or is it too soon to say?</p>""",
-    "card-future": f"""<div class="bar"></div><h1>Free. No login.<br>Every number traced to NASA data.</h1>
+        <p class="small">Challenge: Be An Earth System Trend Detective!</p>""",
+    "card-future": """<div class="bar"></div><h1>Free. No login.<br>Every number traced to NASA data.</h1>
         <p>For classrooms in Pakistan, and everywhere.</p>
-        <p class="url">earth-trend-detective.vercel.app</p>{VOICE_NOTE}""",
+        <p class="url">earth-trend-detective.vercel.app</p>""",
 }
 
 
