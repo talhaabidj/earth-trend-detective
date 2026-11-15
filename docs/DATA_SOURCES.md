@@ -18,6 +18,12 @@ version each time it runs).
 | GEWEX SRB (NASA Langley) | POWER's source for sunlight and cloud before 2001 (we do not use these years) | through POWER | NASA open data |
 | MODIS Terra Vegetation Indices MOD13Q1 v6.1 (Didan, K., 2021, NASA EOSDIS LP DAAC, doi:10.5067/MODIS/MOD13Q1.061) | NDVI for the demo examples, 2000–2025 | ORNL DAAC MODIS Web Service, https://modis.ornl.gov/data/modis_webservice.html (no login) | NASA open data; ORNL DAAC asks users to cite the product and the service |
 
+**Station data used as an outside check (not NASA):** NOAA GHCN-Monthly version 4, adjusted
+monthly average temperatures (Menne et al., 2018), from
+https://www.ncei.noaa.gov/pub/data/ghcn/v4/, accessed 15 November 2026. This is the station set
+that NASA's GISTEMP analysis is built on. Used only in `engine/scripts/station_check.py` and in
+METHODS section 7. US Government open data.
+
 Resources from the challenge page that informed the work: Giovanni (NASA GES DISC), the NASA NTRS
 paper on SeaWiFS chlorophyll time-series and significance testing
 (https://ntrs.nasa.gov/api/citations/20090042747/downloads/20090042747.pdf), and the KNMI Climate

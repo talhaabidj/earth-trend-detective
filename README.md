@@ -50,6 +50,9 @@ story's text does not match the data.
 | Hunza, Pakistan | Are daytime highs rising? | **Not significant yet** (+0.10 °C per decade, range −0.03 to +0.23). About 30 more years of data would settle it. The average temperature is clearly rising (+0.21 °C). |
 | Central Lahore and the Thar desert | Is the land getting greener? (MODIS satellite) | Yes in both, since 2000. A separate NASA dataset (soil wetness) agrees for Thar. |
 
+These are the NASA model's answers. A check against weather stations (see below) found that the
+stations at Jacobabad and Lahore show the average temperature rising, which the model does not.
+
 | | |
 |---|---|
 | ![Jacobabad: no trend in daytime highs, a clear rise in night-time lows](docs/images/02-jacobabad-day-night.jpg) | ![Hunza: not significant yet, about 30 more years needed](docs/images/04-hunza-not-yet.jpg) |
@@ -71,6 +74,12 @@ story's text does not match the data.
 - **Odd data handled:** places with no data, values that never change (soil wetness over open
   ocean) and values that are zero in most months (snow in a desert) get a plain message, not a
   misleading verdict.
+- **Checked against thermometers, and the result reported as it is:** we compared POWER's average
+  temperature with weather station records (NOAA GHCN-Monthly v4) at five places. At Phoenix,
+  Manaus and Svalbard both show clear warming. At Jacobabad and Lahore the stations show clear
+  warming (+0.26 and +0.29 °C per decade) that POWER does not. For those two cities our examples
+  report what the NASA model shows, and the examples say so. Table and discussion:
+  [METHODS, section 7](docs/METHODS.md#7-check-against-weather-stations).
 - **Limits stated:** POWER is a model-based product at about 50 km, not a weather station; a
   straight-line trend is a summary; finding a change is not explaining its cause.
 

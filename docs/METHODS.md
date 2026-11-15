@@ -110,7 +110,42 @@ All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push 
 - Every demo example states the verdict it expects; `engine/scripts/build_examples.py` stops if the
   data gives a different one, so the story text cannot disagree with the numbers.
 
-## 7. Limits
+## 7. Check against weather stations
+
+POWER is a model-based product, so we asked a simple outside question: does a real thermometer show
+the same change? We compared POWER's average air temperature (T2M) with weather station records at
+five of our places, 1981 to 2025, using the same tests, and only the months each station has.
+Station data: NOAA GHCN-Monthly version 4, adjusted series (Menne et al., 2018), the station set
+that NASA's GISTEMP analysis is built on. Script: `engine/scripts/station_check.py`.
+
+| Place | Station | Months | Station, °C per decade | NASA POWER, °C per decade | Month-to-month match |
+|---|---|---|---|---|---|
+| Phoenix | Phoenix Sky Harbor airport (USW00023183) | 491 | +0.43 (+0.34 to +0.54), clear | +0.49 (+0.39 to +0.60), clear | r = 0.97 |
+| Manaus | Manaus (BRM00082331) | 410 | +0.30 (+0.26 to +0.35), clear | +0.24 (+0.20 to +0.27), clear | r = 0.75 |
+| Svalbard | Svalbard airport (SV000001008) | 540 | +0.89 (+0.77 to +1.02), clear | +0.55 (+0.44 to +0.65), clear | r = 0.94 |
+| Jacobabad | Shahbaz air base, Jacobabad (PKM00041715) | 447 | +0.26 (+0.19 to +0.33), clear | +0.05 (−0.04 to +0.15), none | r = 0.73 |
+| Lahore | Lahore City (PK000041640) | 526 | +0.29 (+0.21 to +0.36), clear | −0.14 (−0.25 to −0.03), mixed | r = 0.68 |
+
+What this shows:
+
+- At Phoenix, Manaus and Svalbard the station and POWER agree: clear warming in both. The rates
+  differ (a single airport is not a 50 km grid cell), but the answer is the same.
+- At Jacobabad and Lahore they disagree. The stations show clear warming; POWER shows no trend at
+  Jacobabad and a small fall at Lahore. The gap opens mostly after 2010. With the unadjusted
+  station series the station warming is smaller (+0.12 °C per decade at both) but still clear, so
+  the disagreement does not depend on the station adjustments.
+- We do not know which is closer to the truth for the wider area. A city station also measures the
+  city's own growing heat, and a reanalysis can drift when its input measurements change. What we
+  can say is that, for these two cities, our examples report what the NASA model shows, and the
+  city thermometers say something different.
+- So the tool's results are leads to check, most of all in places with few measurements feeding
+  the model. The site says this in its limits, and the Jacobabad and Lahore examples carry a
+  caution.
+
+Only the average temperature could be checked this way: GHCN-Monthly has no separate day and night
+values, so the night-time result for Jacobabad is not confirmed or contradicted by this check.
+
+## 8. Limits
 
 - POWER is a model-based product at about 50 km, not a weather station. City-scale effects (such as
   a city's own heat island) are smoothed out.
@@ -132,5 +167,6 @@ All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push 
 - Hirsch, R. M., Slack, J. R., & Smith, R. A. (1982). Techniques of trend analysis for monthly water quality data. *Water Resources Research*, 18(1), 107–121.
 - Hussain, M., & Mahmud, I. (2019). pyMannKendall: a python package for non parametric Mann Kendall family of trend tests. *Journal of Open Source Software*, 4(39), 1556.
 - Santer, B. D., et al. (2000). Statistical significance of trends and trend differences in layer-average atmospheric temperature time series. *Journal of Geophysical Research*, 105(D6), 7337–7356.
+- Menne, M. J., Williams, C. N., Gleason, B. E., Rennie, J. J., & Lawrimore, J. H. (2018). The Global Historical Climatology Network Monthly Temperature Dataset, Version 4. *Journal of Climate*, 31(24), 9835–9854.
 - Sen, P. K. (1968). Estimates of the regression coefficient based on Kendall's tau. *Journal of the American Statistical Association*, 63(324), 1379–1389.
 - Weatherhead, E. C., et al. (1998). Factors affecting the detection of trends: Statistical considerations and applications to environmental data. *Journal of Geophysical Research*, 103(D14), 17149–17161. doi:10.1029/98JD00995

@@ -41,7 +41,10 @@ STORIES = [
             {
                 "text": "The average mixes day and night. Split them: daytime highs on the left, night-time lows on "
                         "the right. The nights are clearly getting warmer while the days are not. Warm nights make it "
-                        "harder for people to recover from the heat of the day.",
+                        "harder for people to recover from the heat of the day. A caution: a weather station in "
+                        "Jacobabad shows the average temperature rising by about 0.26 °C per decade, which this "
+                        "NASA model does not show. Models and thermometers can disagree, so treat the result as a "
+                        "lead to check.",
                 "panels": [("Jacobabad", "T2M_MAX", "none"), ("Jacobabad", "T2M_MIN", "clear")],
             },
         ],
@@ -59,7 +62,9 @@ STORIES = [
             },
             {
                 "text": "Daytime highs show the same split: falling in Lahore, rising fast in Phoenix. We do not claim "
-                        "a cause here. The tool finds the change; explaining it is the next step for a detective.",
+                        "a cause here. The tool finds the change; explaining it is the next step for a detective. "
+                        "A caution for Lahore: the city's weather station shows the average temperature rising, "
+                        "not falling, so check the model's answer here against local records.",
                 "panels": [("Lahore", "T2M_MAX", "clear"), ("Phoenix", "T2M_MAX", "clear")],
             },
         ],
