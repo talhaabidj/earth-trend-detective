@@ -56,6 +56,21 @@ def test_seasonal_sen_slope_matches_pymannkendall():
     assert sen["low"] < sen["slope"] < sen["high"]
 
 
+def test_sen_slope_and_range_match_scipy():
+    from scipy import stats as scipy_stats
+    random.seed(4)
+    for count, trend, noise in [(30, 0.05, 0.5), (45, 0.0, 1.0), (20, -0.1, 0.3)]:
+        values = [trend * i + random.gauss(0, noise) for i in range(count)]
+        # One value per year, all in January, turns the seasonal slope into the ordinary Sen slope.
+        rows = [(2000 + i, 1, value) for i, value in enumerate(values)]
+        mk = stats.seasonal_mann_kendall(rows)
+        sen = stats.seasonal_sen_slope(rows, mk["variance"])
+        expected = scipy_stats.theilslopes(values, range(count), alpha=0.95)
+        assert sen["slope"] == pytest.approx(expected.slope)
+        assert sen["low"] == pytest.approx(expected.low_slope)
+        assert sen["high"] == pytest.approx(expected.high_slope)
+
+
 def test_finds_a_known_trend():
     result, _, _ = stats.analyse(make_series(trend_per_year=0.05, noise=0.5))
     assert result["sen_slope"] == pytest.approx(0.05, abs=0.01)

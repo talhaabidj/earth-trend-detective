@@ -90,6 +90,7 @@ Science Division. All sources and licences: [docs/DATA_SOURCES.md](docs/DATA_SOU
 ## Use of SI
 
 Claude Code (Anthropic) helped with the code, the documentation and rendering the demo video.
+The demo video's voice-over is AI-generated (Kokoro text-to-speech).
 
 Prior work: none reused ([docs/REUSED.md](docs/REUSED.md)).
 

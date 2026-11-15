@@ -60,7 +60,10 @@ never changes (for example soil wetness over open ocean is always 1); and too li
 value is zero in most months (snow depth in a desert, frost days in a warm place), the tests rest on
 a few months, so the verdict is capped at "maybe" and a warning is shown.
 
-The rate shown is the Sen slope. When many values repeat (rounded or zero-heavy data such as desert
+The rate shown is the Sen slope. Its 95% range does not allow for month-to-month memory, so "The
+numbers" tab also shows the straight-line rate with its wider, memory-adjusted range. The two rates
+can differ, most of all for rain in places with dry months, where many within-month slopes are zero.
+When many values repeat (rounded or zero-heavy data such as desert
 rain), the Sen slope can be exactly 0 even with a real trend; then we show the least-squares slope
 and say so.
 
@@ -93,8 +96,7 @@ Benjamini-Hochberg check is still valid (Benjamini & Yekutieli 2001).
 All in `engine/tests/` (run `cd engine && python -m pytest`), and on every push in GitHub Actions:
 
 - Mann-Kendall S, variance, z and p match the `pymannkendall` library (v1.4.3) exactly, including ties.
-- The Sen slope and its 95% range match SciPy's independent `theilslopes` exactly on test series
-  (checked by hand on 14 Nov; see the review notes).
+- The Sen slope and its 95% range match SciPy's independent `theilslopes` on test series.
 - Seasonal Mann-Kendall and the seasonal Sen slope match `pymannkendall`.
 - A synthetic series with a known trend of 0.05 per year is recovered within its 95% intervals.
 - Pure noise gives no significant trend.

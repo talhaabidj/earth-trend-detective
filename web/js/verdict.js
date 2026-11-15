@@ -53,6 +53,8 @@ function numbersBehind(result, rateText, rangeText, method, withUnits, decimals)
     `Straight-line test on the anomalies, allowing for month-to-month memory: p = ${pText(result.line_p)} ` +
       `(counts as ${Math.round(result.effective_months)} independent months out of ${result.valid_months})`,
     `Rate from the ${method}: ${rateText} (${rangeText})`,
+    `Rate from the straight-line test: ${withUnits(signed(10 * result.line_slope, decimals))} per decade ` +
+      `(95% range ${signed(10 * result.line_low, decimals)} to ${signed(10 * result.line_high, decimals)}, widened for month-to-month memory)`,
     `Month-to-month memory (lag-1 autocorrelation): ${result.autocorrelation.toFixed(2)}`,
     yearsLine,
   ];
